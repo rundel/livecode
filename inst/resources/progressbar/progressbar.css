@@ -1,0 +1,8 @@
+#progressbar {
+  margin: 0;
+  width: 25px;
+  height: 25px;
+  position: fixed;
+  bottom: 10px;
+  right: 10px;
+}

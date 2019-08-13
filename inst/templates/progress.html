@@ -3,11 +3,12 @@
   <head>
     <title>{title}</title>
     <link href="web/prism/prism.css" rel="stylesheet" />
-    <link href="web/prism/prism.css" rel="stylesheet" />
+    <link href="web/progressbar/progressbar.css" rel="stylesheet" />
     <script>
       var host = "ws://{host}:{port}";
     </script>
-    <script src="web/ws/ws-handler.js"></script>
+    <script src="web/progressbar/progressbar.min.js"></script>
+    <script src="web/ws/ws-handler-progress.js"></script>
   </head>
   <body>
     <script src="web/prism/prism.js"></script>
@@ -15,5 +16,6 @@
       <code class="language-{lang}">
       </code>
     </pre>
+  <div id="progressbar"></div>
   </body>
 </html>
