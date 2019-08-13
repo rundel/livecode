@@ -16,7 +16,12 @@ draw_pb = function(interval) {
 };
 
 ws.onmessage = function(msg) {
-  document.getElementsByTagName("code")[0].innerHTML = msg.data;
-  draw_pb(2);
+  var obj = JSON.parse(msg.data);
+
+  draw_pb(obj.interval);
+
+  if (obj.content) {
+    document.getElementsByTagName("code")[0].innerHTML = obj.content;
+  }
 };
 

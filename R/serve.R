@@ -1,80 +1,86 @@
-pkg_resource = function(..., must_work = FALSE) {
-  system.file(..., package = "livecode", mustWork = must_work)
+get_private_member = function(obj, member) {
+  obj[[".__enclos_env__"]][["private"]][[member]]
 }
 
-get_template = function(name) {
-  if (file.exists(name))
-    return(name)
+FileStreamServer <- R6::R6Class(
+  "FileStreamServer",
+  cloneable = FALSE,
+  inherit = httpuv:::WebServer,
+  public = list(
+    initialize = function(host, port, file, interval = 2.5, template = "progress") {
 
-  file = pkg_resource("templates", paste0(name, ".html"))
+      private$file_cache = file_cache(file)
+      private$interval = interval
+      private$page = glue::glue(
+        readr::read_file(get_template(template)),
+        lang = "r",
+        title = file
+      )
 
-  if (file == "")
-    usethis::ui_stop("Template {usethis::ui_value(name)} does not exist.")
+      FileStreamApp <- list(
+        call = function(req) {
+          list(
+            status = 200L,
+            headers = list(
+              'Content-Type' = 'text/html'
+            ),
+            body = private$page
+          )
+        },
+        onWSOpen = function(ws) {
+          msg = list(
+            interval = private$interval,
+            content = private$file_cache$content
+          )
 
-  file
-}
+          ws$send(jsonlite::toJSON(msg, auto_unbox = TRUE))
 
-#'
-#' @export
-#'
-serve_file = function(file, template = "plain") {
+          NULL
+        },
+        staticPaths = list(
+          "/web" = pkg_resource("resources")
+        )
+      )
 
-  if (missing(file) && requireNamespace('rstudioapi', quietly = TRUE)) {
-    file = rstudioapi::getSourceEditorContext()[['path']]
+      super$initialize(host, port, FileStreamApp)
 
-    if (is.null(file) || file == '')
-      usethis::ui_stop('Cannot find an open document in the RStudio editor')
-  }
+      private$ws = get_private_member(private$appWrapper, "wsconns")
 
-  name = basename(file)
+      send_and_reschedule <- function() {
+        if (!self$isRunning())
+          return()
 
-  d = file.path(tempdir(), name)
-  dir.create(d, showWarnings = FALSE, recursive = TRUE)
+        message(Sys.time())
 
+        for(n in names(private$ws)) {
+          if (is.null(private$ws[[n]]))
+            next
+          msg = list(
+            interval = private$interval
+          )
 
-  tmpl = readr::read_file(get_template(template))
-  html = file.path(d, "index.html")
+          if (private$file_cache$need_update()) {
+            msg$content = private$file_cache$content
+          }
 
-  rebuild = function() {
-    code = readr::read_file(file)
-    title = name
-    lang = "r"
-    readr::write_file(glue::glue(tmpl), html)
-  }
+          private$ws[[n]]$send(jsonlite::toJSON(msg, auto_unbox = TRUE))
+        }
 
-
-  build = local({
-    d = dirname(file)
-    files = file
-
-    mtime = function() file.info(file)[, 'mtime']
-
-    rebuild()
-    l = mtime()
-
-    r = servr:::is_rstudio();
-
-    function(message) {
-      if (length(message) != 0)
-        cat("Message: ", message, "\n")
-      m2 = mtime()
-      if (m2 > l) {
-        rebuild()
-        l <<- mtime()
-        TRUE
-      } else {
-        FALSE
+        later::later(send_and_reschedule, private$interval)
       }
+      send_and_reschedule()
     }
-  })
-
-  dynamic_site(
-    dir = d,
-    static_paths = list("/prism" = pkg_resource("resources", "prism")),
-    build = build,
-    ws_handler = pkg_resource('resources', 'ws-handler.js'),
-    interval = 0.1
+  ),
+  private = list(
+    ws = NULL,
+    file_cache = NULL,
+    interval = NULL,
+    page = NULL
   )
+)
+
+#' @export
+serve_file = function() {
+  later::later(~browseURL("http://localhost:5000/", browser = get_browser()), 1)
+  FileStreamServer$new("0.0.0.0", 5000L, "reprex.R")
 }
-
-

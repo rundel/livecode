@@ -1,5 +1,5 @@
 Package: livecode
-Title: What the Package Does (One Line, Title Case)
+Title: Share a local text document over the web and provide live updates as it is edited.
 Version: 0.0.0.9000
 Authors@R: 
     person(given = "First",
@@ -16,5 +16,6 @@ Imports:
     readr,
     glue,
     withr,
-    jsonlite
+    jsonlite,
+    httpuv
 RoxygenNote: 6.1.1
