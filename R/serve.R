@@ -7,7 +7,7 @@ FileStreamServer <- R6::R6Class(
   cloneable = FALSE,
   inherit = httpuv:::WebServer,
   public = list(
-    initialize = function(host, port, file, interval = 2.5, template = "progress") {
+    initialize = function(host, port, file, interval = 2.5, template = "prism") {
 
       private$file_cache = file_cache(file)
       private$interval = interval
@@ -82,5 +82,5 @@ FileStreamServer <- R6::R6Class(
 #' @export
 serve_file = function() {
   later::later(~browseURL("http://localhost:5000/", browser = get_browser()), 1)
-  FileStreamServer$new("0.0.0.0", 5000L, "reprex.R")
+  FileStreamServer$new("0.0.0.0", 5000L, "reprex.R", template="highlight")
 }
