@@ -64,7 +64,7 @@ bitly_shorten = function(url, guid = bitly_get_groups()[1]) {
   link = bitly_api_shorten(url, guid)[["link"]]
 
   usethis::ui_done(
-    "Created a bit.ly shortlink {usethis::ui_value(link)} from {usethis::ui_value(url)}."
+    "Created bitlink {usethis::ui_value(link)} for {usethis::ui_value(url)}."
   )
 
   link
