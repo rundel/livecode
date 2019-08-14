@@ -17,5 +17,7 @@ Imports:
     glue,
     withr,
     jsonlite,
-    httpuv
+    httpuv,
+    httr,
+    purrr
 RoxygenNote: 6.1.1
