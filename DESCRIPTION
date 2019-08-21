@@ -19,5 +19,8 @@ Imports:
     jsonlite,
     httpuv,
     httr,
-    purrr
+    purrr,
+    Rcpp
 RoxygenNote: 6.1.1
+LinkingTo: 
+    Rcpp
