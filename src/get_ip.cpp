@@ -6,19 +6,18 @@
 #include <string.h>
 #include <arpa/inet.h>
 
+//' @export
 // [[Rcpp::export]]
-Rcpp::CharacterVector get_ip() {
-  struct ifaddrs *ifAddrStruct = NULL;
-  struct ifaddrs *ifa = NULL;
-  void *tmpAddrPtr = NULL;
-
-  char addr_buffer[INET_ADDRSTRLEN];
-
+Rcpp::CharacterVector get_ipv4() {
   Rcpp::CharacterVector ifaces;
   Rcpp::CharacterVector addrs;
 
+  char addr_buffer[INET_ADDRSTRLEN];
+
+  ifaddrs *ifAddrStruct = NULL;
   getifaddrs(&ifAddrStruct);
-  for (ifa = ifAddrStruct; ifa != NULL; ifa = ifa->ifa_next) {
+
+  for (ifaddrs *ifa = ifAddrStruct; ifa != NULL; ifa = ifa->ifa_next) {
     if (!ifa->ifa_addr) {
       continue;
     }
@@ -40,5 +39,5 @@ Rcpp::CharacterVector get_ip() {
 }
 
 /*** R
-get_ip()
+get_ipv4()
 */

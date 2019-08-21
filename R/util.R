@@ -24,3 +24,20 @@ get_template = function(name) {
 
   file
 }
+
+is_error = function(obj) {
+  inherits(obj, "try-error")
+}
+
+port_available = function(host, port) {
+  ll = httpuv:::logLevel("OFF")
+  s = try({httpuv::startServer(host, port, list())}, silent = TRUE)
+  httpuv:::logLevel(ll)
+
+  if (is_error(s)) {
+    FALSE
+  } else {
+    httpuv::stopServer(s)
+    TRUE
+  }
+}
