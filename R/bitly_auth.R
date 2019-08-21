@@ -35,9 +35,8 @@ bitly_reset_token = function() {
 
 
 #' @export
-
 bitly_test_token = function(token = bitly_get_token()) {
-  res = purrr::safely(gh::gh)("/user", .token=token)
+  res = purrr::safely(bitly_api_user)()
 
   status_msg(
     res,
@@ -46,3 +45,7 @@ bitly_test_token = function(token = bitly_get_token()) {
   )
 }
 
+bitly_available = function() {
+  res = purrr::safely(bitly_api_user)()
+  succeeded(res)
+}

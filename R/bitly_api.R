@@ -24,9 +24,10 @@ bitly_api = function(endpoint, method = "GET", ..., token = bitly_get_token()) {
   )
 
   res = httr::content(req)
+  code = httr::status_code(req)
 
-  if (httr::status_code(req) != 200) {
-    usethis::ui_stop( "{res[['description']]} ({res[['message']]})" )
+  if (code >= 300) {
+    usethis::ui_stop("Bitly API error code ({code}) - {res[['message']]}")
   }
 
   res
