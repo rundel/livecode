@@ -20,7 +20,8 @@ Imports:
     httpuv,
     httr,
     purrr,
-    Rcpp
+    Rcpp,
+    iptools
 RoxygenNote: 6.1.1
 LinkingTo: 
     Rcpp
