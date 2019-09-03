@@ -52,30 +52,54 @@ ip_type = function(ip) {
   type[is_ip_private(ip)] = "private"
   type[is_ip_loopback(ip)] = "loopback"
 
-  type
+  # ordered based on preference heuristic
+  factor(type, levels = c("public", "private", "reserved", "loopback"))
 }
+
+iface_type = function(iface) {
+  iface = tolower(iface)
+  type = rep("other", length(iface))
+
+  # Based on "Predictable Network Interface Device Names"
+  type[grepl("^en", iface)] = "ethernet"
+  type[grepl("^wl", iface)] = "wlan"
+  type[grepl("^ww", iface)] = "wwan"
+  type[grepl("^lo", iface)] = "loopback"
+
+  # ordered based on preference heuristic
+  factor(type, levels = c("ethernet", "wlan", "wwan", "other", "loopback"))
+}
+
+
+
 
 get_interfaces = function() {
   ips = get_ipv4()
   types = ip_type(ips)
 
-  tibble::tibble(
+  df = tibble::tibble(
     interface = names(ips),
+    iface_type = iface_type(names(ips)),
     ip = ips,
-    type = types
+    ip_type = types
   )
+
+  # Basic ordering heuristic:
+  # Sort on ip_type, then iface_type, then interface name.
+
+  df[order(df[["ip_type"]], df[["iface_type"]], df[["interface"]]),]
 }
 
-print_interfaces = function(ifaces = get_interfaces()) {
+print_interfaces = function() {
 
   usethis:::hd_line("Network interfaces:")
   purrr::pwalk(
-    ifaces,
-    function(interface, ip, type) {
+    get_interfaces(),
+    function(interface, iface_type, ip, ip_type) {
       usethis:::cat_line(
         "* ", interface, ": ",
         usethis::ui_value(ip),
-        " (", crayon::blurred(type) ,")"
+        " (", crayon::blurred(ip_type) ,")"
       )
     }
   )
