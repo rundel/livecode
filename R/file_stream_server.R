@@ -20,8 +20,8 @@ file_stream_server = function(host, port, file, interval = 3, template = "prism"
     if (!server$isRunning())
       return()
 
-    message(Sys.time())
-    rlang::env_print(websockets)
+    #message(Sys.time())
+
     msg = list(interval = interval)
     if (file_cache$need_update())
       msg$content = file_cache$content
@@ -73,13 +73,53 @@ file_stream_server = function(host, port, file, interval = 3, template = "prism"
   )
 
   server = httpuv::startServer(host, port, app)
+
+  addr = paste(host, port, sep=":")
+  file = fs::path_file(file)
+  usethis::ui_done( paste(
+    "Started sharing {usethis::ui_value(file)} at {usethis::ui_value(addr)}."
+  ) )
+
+  server
 }
 
+get_cur_file = function() {
+  if (!is_rstudio()) {
+    usethis::ui_stop( paste(
+      "If you are not using RStudio you must explicitly",
+      "include the file to serve."
+    ) )
+  }
+
+  ctx = rstudioapi::getSourceEditorContext()
+
+  file = ctx[["path"]]
+  attr(file, "rstudio_id") = ctx[["id"]]
+
+  file
+}
 
 #' @export
-serve_file = function() {
-  later::later(~browseURL("http://localhost:5000/", browser = get_browser()), 1)
-  file_stream_server("0.0.0.0", 5000L, "reprex.R", template="prism")
+serve_file = function(file = get_cur_file(), ip = get_ip(), port = 5000L) {
+
+  if (is.null(file) | file == "") {
+    usethis::ui_stop( paste(
+      "No file specified, if you are using RStudio ",
+      "make sure the file has been saved at least once."
+    ) )
+  }
+
+  server = list(
+    file = file,
+    ip = ip,
+    port = port,
+    server = file_stream_server(ip, port, file, template="prism")
+  )
+
+  url = glue::glue_data(server, "http://{ip}:{port}")
+  later::later(~browseURL(url, browser = get_browser()), 1)
+
+  server
 }
 
 
