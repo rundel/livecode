@@ -1,4 +1,4 @@
-file_stream_server = function(host, port, file, interval = 3, template = "prism") {
+file_stream_server = function(host, port, file, file_id, interval = 3, template = "prism") {
   port = as.integer(port)
   file_cache = file_cache(file)
   page = glue::glue(
@@ -22,9 +22,23 @@ file_stream_server = function(host, port, file, interval = 3, template = "prism"
 
     #message(Sys.time())
 
+    if (is_rstudio() & !is.null(file_id)) {
+      rstudioapi::documentSave(file_id)
+    }
+
     msg = list(interval = interval)
     if (file_cache$need_update())
-      msg$content = file_cache$content
+      msg[["content"]] = file_cache$content
+
+    if (is_rstudio()) {
+      ctx = rstudioapi::getSourceEditorContext()
+      open_file = path.expand(ctx[["path"]])
+
+      if (file == open_file) {
+        ln = extract_line_nums(ctx[["selection"]])
+        msg[["selection"]] = ln
+      }
+    }
 
     msg = jsonlite::toJSON(msg, auto_unbox = TRUE)
 
@@ -75,51 +89,92 @@ file_stream_server = function(host, port, file, interval = 3, template = "prism"
   server = httpuv::startServer(host, port, app)
 
   addr = paste(host, port, sep=":")
-  file = fs::path_file(file)
   usethis::ui_done( paste(
-    "Started sharing {usethis::ui_value(file)} at {usethis::ui_value(addr)}."
+    "Started sharing {usethis::ui_value(fs::path_file(file))} at {usethis::ui_value(addr)}."
   ) )
 
   server
 }
 
-get_cur_file = function() {
-  if (!is_rstudio()) {
-    usethis::ui_stop( paste(
-      "If you are not using RStudio you must explicitly",
-      "include the file to serve."
-    ) )
+#' @export
+serve_file = function(file, ip, port, template = "prism", bitly = TRUE, auto_save = TRUE) {
+
+  if (missing(file))
+    file = NULL
+  else
+    file = path.expand(file)
+
+  file_id = NULL
+  if (is_rstudio()) {
+    if (is.character(file)) {
+      rstudioapi::navigateToFile(file)
+      Sys.sleep(1)
+    }
+
+    ctx = rstudioapi::getSourceEditorContext()
+
+    file = path.expand(ctx[["path"]])
+    file_id = ctx[["id"]]
   }
 
-  ctx = rstudioapi::getSourceEditorContext()
-
-  file = ctx[["path"]]
-  attr(file, "rstudio_id") = ctx[["id"]]
-
-  file
-}
-
-#' @export
-serve_file = function(file = get_cur_file(), ip = get_ip(), port = 5000L) {
+  if (!auto_save)
+    file_id = NULL
 
   if (is.null(file) | file == "") {
     usethis::ui_stop( paste(
       "No file specified, if you are using RStudio ",
-      "make sure the file has been saved at least once."
+      "make sure the current open file has been saved ",
+      "at least once."
+    ) )
+  }
+
+
+  if (missing(ip)) {
+    ip = get_interfaces()[["ip"]][1]
+
+    usethis::ui_info( c(
+      "No ip address provided, using {usethis::ui_value(ip)}",
+      "(If this does not work check available ips using {usethis::ui_code(\"get_interfaces()\")})"
+    ))
+  }
+
+
+  if (missing(port)) {
+    port = httpuv::randomPort(host = ip)
+
+    usethis::ui_info( paste(
+      "No port provided, using port {usethis::ui_value(port)}."
+    ))
+  }
+
+  if (is_ip_private(ip)) {
+    usethis::ui_info( paste(
+      "The current ip address ({usethis::ui_value(ip)}) for the server is private, ",
+      "only users on the same local network are likely to be able to connect."
     ) )
   }
 
   server = list(
-    file = file,
     ip = ip,
     port = port,
-    server = file_stream_server(ip, port, file, template="prism")
+    file = file,
+    file_id = file_id,
+    template = template,
+    server = file_stream_server(ip, port, file, file_id, template = template)
   )
 
-  url = glue::glue_data(server, "http://{ip}:{port}")
-  later::later(~browseURL(url, browser = get_browser()), 1)
+  server[["url"]] = glue::glue_data(server, "http://{ip}:{port}")
 
-  server
+  if (bitly) {
+    res = purrr::safely(bitly_shorten)(server[["url"]])
+
+    if (succeeded(res))
+      server[["bit_link"]] = result(res)
+  }
+
+
+  later::later(~browseURL(server[["url"]], browser = get_browser()), 1)
+
+  invisible(server)
 }
-
 

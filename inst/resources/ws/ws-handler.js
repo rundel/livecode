@@ -17,12 +17,28 @@ draw_pb = function(interval) {
 
 ws.onmessage = function(msg) {
   var obj = JSON.parse(msg.data);
+  var need_update = false;
 
   draw_pb(obj.interval);
+
+  if (obj.selection) {
+    if (typeof Prism != "undefined") {
+      var cur = document.getElementsByTagName("pre")[0].getAttribute("data-line");
+      if (cur != obj.selection) {
+        document.getElementsByTagName("pre")[0].setAttribute("data-line", obj.selection);
+        need_update = true;
+      }
+    }
+  }
 
   if (obj.content) {
     var code = obj.content.replace(/</g,"&lt;");
     document.getElementsByTagName("code")[0].innerHTML = code;
+
+    need_update = true;
+  }
+
+  if (need_update) {
     document.querySelectorAll('pre code').forEach((block) => {
       if (typeof hljs  != "undefined") {
         hljs.highlightBlock(block);
