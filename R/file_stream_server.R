@@ -66,14 +66,7 @@ file_stream_server = function(host, port, file, file_id, interval = 3, template 
       msg[["content"]] = file_cache$content
 
     if (server$have_msgs()) {
-      msgs = server$get_msgs()
-      msgs = purrr::map(msgs, ~ .$get_msg())
-
-      cat("Sending:\n")
-      purrr::iwalk(
-        msgs,
-        ~ cat("[", .y, "] ", usethis::ui_value(.x$text), "\n", sep="")
-      )
+      msgs = purrr::map(server$get_msgs(), ~ .$get_msg())
 
       msg[["messages"]] = msgs
     }
@@ -134,95 +127,212 @@ file_stream_server = function(host, port, file, file_id, interval = 3, template 
     )
   )
 
+  # Must be defined for the websocket_loop above to work
   server = lc_server$new(host, port, app)
-
-  addr = paste(host, port, sep=":")
-  usethis::ui_done( paste(
-    "Started sharing {usethis::ui_value(fs::path_file(file))} at {usethis::ui_value(addr)}."
-  ) )
 
   server
 }
 
-#' @export
-serve_file = function(file, ip, port, template = "prism", bitly = TRUE, auto_save = TRUE) {
+lc_server_iface = R6::R6Class(
+  "LiveCodeServer_Interface",
+  cloneable = FALSE,
+  private = list(
+    file = NULL,
+    file_id = NULL,
+    ip = NULL,
+    port = NULL,
+    template = NULL,
+    interval = NULL,
+    bitly_url = NULL,
+    server = NULL,
 
-  if (missing(file))
-    file = NULL
-  else
-    file = path.expand(file)
+    init_file = function(file, auto_save) {
 
-  file_id = NULL
-  if (is_rstudio()) {
-    if (is.character(file)) {
-      rstudioapi::navigateToFile(file)
-      Sys.sleep(1)
+      if (missing(file))
+        file = NULL
+      else if (!is.null(file))
+        file = path.expand(file)
+
+      file_id = NULL
+      if (is_rstudio()) {
+        if (is.character(file)) {
+          rstudioapi::navigateToFile(file)
+          Sys.sleep(0.5)
+        }
+
+        ctx = rstudioapi::getSourceEditorContext()
+
+        file = path.expand(ctx[["path"]])
+        file_id = ctx[["id"]]
+      }
+
+      if (!auto_save)
+        file_id = NULL
+
+      if (is.null(file) | file == "") {
+        usethis::ui_stop( paste(
+          "No file specified, if you are using RStudio ",
+          "make sure the current open file has been saved ",
+          "at least once."
+        ) )
+      }
+
+      private$file = file
+      private$file_id = file_id
+    },
+
+    init_ip = function(ip) {
+      if (missing(ip)) {
+        ip = get_interfaces()[["ip"]][1]
+
+        usethis::ui_info( c(
+          "No ip address provided, using {usethis::ui_value(ip)}",
+          "(If this does not work check available ips using {usethis::ui_code(\"get_interfaces()\")})"
+        ))
+      }
+
+      if (is.na(iptools::ip_classify(ip))) {
+        usethis::ui_stop( paste(
+          "Invalid ip address provided ({usethis::ui_value(ip)})."
+        ) )
+      }
+
+      if (is_ip_private(ip)) {
+        usethis::ui_info( paste(
+          "The current ip address ({usethis::ui_value(ip)}) for the server is private,",
+          "only users on the same local network are likely to be able to connect."
+        ) )
+      }
+
+      private$ip = ip
+    },
+
+    init_port = function(port) {
+      if (missing(port)) {
+        port = httpuv::randomPort(host = private$ip)
+
+        usethis::ui_info( paste(
+          "No port provided, using port {usethis::ui_value(port)}."
+        ))
+      }
+
+      port = as.integer(port)
+
+      if (port < 1024L | port > 49151L) {
+        usethis::ui_stop( paste(
+          "Invalid port ({usethis::ui_value(ip)}), value must be between 1024 and 49151."
+        ) )
+      }
+
+      private$port = port
+    },
+
+    init_bitly = function() {
+      res = purrr::safely(bitly_shorten)(self$url)
+      if (succeeded(res))
+        private$bitly_url = result(res)
+    },
+
+    start_server = function() {
+      private$server = file_stream_server(
+        private$ip, private$port, private$file, private$file_id,
+        template = private$template, interval = private$interval
+      )
+
+      usethis::ui_done( paste(
+        "Started sharing {usethis::ui_value(fs::path_file(private$file))}",
+        "at {usethis::ui_value(self$url)}."
+      ) )
+
+      later::later(~browseURL(self$url, browser = get_browser()), 1)
     }
 
-    ctx = rstudioapi::getSourceEditorContext()
+  ),
+  public = list(
+    initialize = function(file, ip, port, interval = 2, template = "prism", bitly = FALSE, auto_save = TRUE) {
+      private$init_file(file, auto_save)
+      private$init_ip(ip)
+      private$init_port(port)
 
-    file = path.expand(ctx[["path"]])
-    file_id = ctx[["id"]]
-  }
+      private$template = template
+      private$interval = interval
+      private$start_server()
 
-  if (!auto_save)
-    file_id = NULL
+      if (bitly)
+        private$init_bitly()
+    },
 
-  if (is.null(file) | file == "") {
-    usethis::ui_stop( paste(
-      "No file specified, if you are using RStudio ",
-      "make sure the current open file has been saved ",
-      "at least once."
-    ) )
-  }
+    print = function(...) {
 
+      usethis:::cat_line(
+        crayon::bold("File Streaming Server: "),
+        ifelse(
+          private$server$isRunning(),
+          "(running)",
+          "(stopped)"
+        )
+      )
+      usethis:::kv_line("file", private$file)
 
-  if (missing(ip)) {
-    ip = get_interfaces()[["ip"]][1]
+      if (private$server$isRunning()) {
+        usethis:::kv_line("url", self$url)
+        usethis:::kv_line("ip type", as.character(ip_type(private$ip)))
+        if (!is.null(private$bitly_url))
+          usethis:::kv_line("bitly url", private$bitly_url)
+      }
+    },
 
-    usethis::ui_info( c(
-      "No ip address provided, using {usethis::ui_value(ip)}",
-      "(If this does not work check available ips using {usethis::ui_code(\"get_interfaces()\")})"
-    ))
-  }
+    send_msg = function(text, timeout = 0, type = "alert", theme = "semanticui") {
+      private$server$add_msg(
+        noty_msg$new(text = text, type = type, timeout = timeout, theme = theme)
+      )
+    },
 
+    send_timer = function(text, timeout = 30, type = "error", theme = "semanticui") {
+      private$server$add_msg(
+        noty_msg$new(text = text, type = type, theme = theme,
+                     timeout = timeout*1000, progressBar = TRUE)
+      )
+    },
 
-  if (missing(port)) {
-    port = httpuv::randomPort(host = ip)
+    is_running = function() {
+      private$server$isRunning()
+    },
 
-    usethis::ui_info( paste(
-      "No port provided, using port {usethis::ui_value(port)}."
-    ))
-  }
+    stop = function(warn = FALSE) {
+      if (warn) {
+        self$send_msg("Server is shuting down!", type = "error")
+        Sys.sleep(private$interval)
+        later::run_now()
+      }
+      # Wait for a tic before shutting down so the message will go out
+      Sys.sleep(private$interval)
 
-  if (is_ip_private(ip)) {
-    usethis::ui_info( paste(
-      "The current ip address ({usethis::ui_value(ip)}) for the server is private, ",
-      "only users on the same local network are likely to be able to connect."
-    ) )
-  }
+      private$server$stop()
 
-  server = list(
-    ip = ip,
-    port = port,
-    file = file,
-    file_id = file_id,
-    template = template,
-    server = file_stream_server(ip, port, file, file_id, template = template)
+      usethis::ui_done( paste(
+        "Stopped server at {usethis::ui_value(self$url)}."
+      ) )
+    },
+
+    restart = function() {
+      if (self$is_running()) {
+        self$stop()
+      }
+
+      private$start_server()
+    }
+  ),
+  active = list(
+    url = function() {
+      glue::glue("http://{private$ip}:{private$port}")
+    }
   )
+)
 
-  server[["url"]] = glue::glue_data(server, "http://{ip}:{port}")
-
-  if (bitly) {
-    res = purrr::safely(bitly_shorten)(server[["url"]])
-
-    if (succeeded(res))
-      server[["bit_link"]] = result(res)
-  }
-
-
-  later::later(~browseURL(server[["url"]], browser = get_browser()), 1)
-
-  invisible(server)
+#' @export
+serve_file = function(file, ip, port, bitly = FALSE, auto_save = TRUE, template = "prism", interval = 2) {
+  lc_server_iface$new(file, ip, port, interval, template, bitly, auto_save)
 }
+
 
