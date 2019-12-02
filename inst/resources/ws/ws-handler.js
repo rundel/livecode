@@ -8,12 +8,44 @@ draw_pb = function(interval) {
 
   new ProgressBar.Circle(progressbar, {
     strokeWidth: 50,
-    easing: 'easeInOut',
+    easing: 'linear',
     duration: interval*1000,
     color: '#6499D3',
     svgStyle: null
   }).animate(1.0);
 };
+
+draw_timer = function(duration, color) {
+
+  new ProgressBar.Line(container, {
+    strokeWidth: 10,
+    easing: 'linear',
+    duration: duration * 1000,
+    color: color,
+    trailColor: '#eee',
+    svgStyle: {width: '100%'},
+    text: {
+      style: {
+        color: '#999',
+        position: 'absolute',
+        left: '50%',
+        top: '10%',
+        padding: 0,
+        margin: 0,
+        transform: null
+      }
+    },
+    step: (state, bar) => {
+    	var sec_left = duration - duration * bar.value();
+      var sec = Math.round(sec_left % 60).toString().padStart(2,"0");
+      var min = Math.floor( sec_left / 60 ).toString().padStart(2,"0");
+
+      bar.setText(min + ":" + sec);
+    }
+  }).animate(1.0);
+};
+
+
 
 ws.onmessage = function(msg) {
   var obj = JSON.parse(msg.data);
@@ -28,6 +60,14 @@ ws.onmessage = function(msg) {
         document.getElementsByTagName("pre")[0].setAttribute("data-line", obj.selection);
         need_update = true;
       }
+    }
+  }
+
+  if (obj.messages) {
+    //document.getElementById("debug").innerHTML += JSON.stringify( obj.messages );
+    //document.getElementById("debug").innerHTML += "\n\n";
+    for(var m of obj.messages) {
+      new Noty(m).show();
     }
   }
 

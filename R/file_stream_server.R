@@ -1,3 +1,40 @@
+lc_server <- R6::R6Class(
+  "LiveCodeServer",
+  cloneable = FALSE,
+  inherit = httpuv:::WebServer,
+  public = list(
+    have_msgs = function() {
+      length(private$msg_queue) > 0
+    },
+
+    get_msgs = function() {
+      msgs = private$msg_queue
+      private$msg_queue = list()
+      msgs
+    },
+
+    peek_msgs = function() {
+      purrr::map_chr(private$msg_queue, ~ .$get_text())
+    },
+
+    add_msg = function(m) {
+
+      if (is.character(m) & length(m) == 1) {
+        m = noty_msg$new(m)
+      }
+
+      if (!inherits(m, "noty_msg")) {
+        usethis::ui_stop("Invalid message type, must either be a character or noty_msg object.")
+      }
+      private$msg_queue = append(private$msg_queue, m)
+    }
+  ),
+  private = list(
+    msg_queue = list()
+  )
+)
+
+
 file_stream_server = function(host, port, file, file_id, interval = 3, template = "prism") {
   port = as.integer(port)
   file_cache = file_cache(file)
@@ -20,8 +57,6 @@ file_stream_server = function(host, port, file, file_id, interval = 3, template 
     if (!server$isRunning())
       return()
 
-    #message(Sys.time())
-
     if (is_rstudio() & !is.null(file_id)) {
       rstudioapi::documentSave(file_id)
     }
@@ -29,6 +64,19 @@ file_stream_server = function(host, port, file, file_id, interval = 3, template 
     msg = list(interval = interval)
     if (file_cache$need_update())
       msg[["content"]] = file_cache$content
+
+    if (server$have_msgs()) {
+      msgs = server$get_msgs()
+      msgs = purrr::map(msgs, ~ .$get_msg())
+
+      cat("Sending:\n")
+      purrr::iwalk(
+        msgs,
+        ~ cat("[", .y, "] ", usethis::ui_value(.x$text), "\n", sep="")
+      )
+
+      msg[["messages"]] = msgs
+    }
 
     if (is_rstudio()) {
       ctx = rstudioapi::getSourceEditorContext()
@@ -86,7 +134,7 @@ file_stream_server = function(host, port, file, file_id, interval = 3, template 
     )
   )
 
-  server = httpuv::startServer(host, port, app)
+  server = lc_server$new(host, port, app)
 
   addr = paste(host, port, sep=":")
   usethis::ui_done( paste(
