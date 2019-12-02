@@ -1,12 +1,13 @@
 FileCache = R6::R6Class(
   "FileCache",
   public = list(
-    initialize = function(path) {
+    initialize = function(path, file_id = NULL) {
       path = normalizePath(path)
       if (!file.exists(path))
         usethis::ui_stop("Unable to locate file {usethis::ui_value(path)}")
 
       private$path = path
+      private$file_id = file_id
       self$update_content()
     },
     need_update = function() {
@@ -22,6 +23,7 @@ FileCache = R6::R6Class(
   ),
   private = list(
     path = NULL,
+    file_id = NULL,
     mtime = NULL,
     cache_content = NULL
   ),
@@ -36,6 +38,6 @@ FileCache = R6::R6Class(
 )
 
 #' @export
-file_cache = function(path) {
-  FileCache$new(path)
+file_cache = function(path, file_id = NULL) {
+  FileCache$new(path, file_id)
 }
