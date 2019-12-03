@@ -22,6 +22,6 @@ Imports:
     purrr,
     Rcpp,
     iptools
-RoxygenNote: 7.0.0
+RoxygenNote: 7.0.2
 LinkingTo: 
     Rcpp

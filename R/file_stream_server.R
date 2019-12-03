@@ -133,6 +133,15 @@ file_stream_server = function(host, port, file, file_id, interval = 3, template 
   server
 }
 
+#' livecode server interface
+#'
+#' @description
+#' This is a high level, user facing interface class that allows
+#' for the creation of a livecode server sharing a specific file.
+#' The interface also provides additional tools for sending messages.
+#'
+#' @export
+
 lc_server_iface = R6::R6Class(
   "LiveCodeServer_Interface",
   cloneable = FALSE,
@@ -249,7 +258,20 @@ lc_server_iface = R6::R6Class(
 
   ),
   public = list(
-    initialize = function(file, ip, port, interval = 2, template = "prism", bitly = FALSE, auto_save = TRUE) {
+    #' @description
+    #' Creates a new livecode server
+    #'
+    #' @param file Path to file to broadcast.
+    #' @param ip ip of the server, defaults to the top result of `get_interfaces`.
+    #' @param port port of the server, defaults to a random value.
+    #' @param interval page update interval in seconds.
+    #' @param template page template to use.
+    #' @param bitly should a bitly bit link be created for the server.
+    #' @param auto_save should the broadcast file be auto saved update tic.
+    initialize = function(
+      file, ip, port, interval = 2, template = "prism",
+      bitly = FALSE, auto_save = TRUE
+    ) {
       private$init_file(file, auto_save)
       private$init_ip(ip)
       private$init_port(port)
@@ -262,8 +284,9 @@ lc_server_iface = R6::R6Class(
         private$init_bitly()
     },
 
-    print = function(...) {
-
+    #' @description
+    #' Class print method
+    print = function() {
       usethis:::cat_line(
         crayon::bold("File Streaming Server: "),
         ifelse(
@@ -282,12 +305,26 @@ lc_server_iface = R6::R6Class(
       }
     },
 
+    #' @description
+    #' Send a noty message to all connected users on the next update tic.
+    #'
+    #' @param text text of the message.
+    #' @param timeout how long should the message stay on screen in seconds.
+    #' @param type message type (`alert`, `success`, `warning`, `error`, `info`).
+    #' @param theme message theme (See [here](https://ned.im/noty/#/themes) for options)
     send_msg = function(text, timeout = 0, type = "alert", theme = "semanticui") {
       private$server$add_msg(
         noty_msg$new(text = text, type = type, timeout = timeout, theme = theme)
       )
     },
 
+    #' @description
+    #' Send a noty message with a built in countdown timer on the next update tic.
+    #'
+    #' @param text text of the message.
+    #' @param timeout how long should the countdown timer take in seconds.
+    #' @param type message type (`alert`, `success`, `warning`, `error`, `info`).
+    #' @param theme message theme (See [here](https://ned.im/noty/#/themes) for options)
     send_timer = function(text, timeout = 30, type = "error", theme = "semanticui") {
       private$server$add_msg(
         noty_msg$new(text = text, type = type, theme = theme,
@@ -295,13 +332,21 @@ lc_server_iface = R6::R6Class(
       )
     },
 
+
+    #' @description
+    #' Determine if the server is running.
+    #' @return Returns `TRUE` if the server is running.
     is_running = function() {
       private$server$isRunning()
     },
 
+    #' @description
+    #' Stop the server
+    #'
+    #' @param warn Should the users be sent a warning that the server is shutting down.
     stop = function(warn = FALSE) {
       if (warn) {
-        self$send_msg("Server is shuting down!", type = "error")
+        self$send_msg("Server is shutting down!", type = "error")
         Sys.sleep(private$interval)
         later::run_now()
       }
@@ -315,6 +360,8 @@ lc_server_iface = R6::R6Class(
       ) )
     },
 
+    #' @description
+    #' Restart the server
     restart = function() {
       if (self$is_running()) {
         self$stop()
@@ -324,13 +371,25 @@ lc_server_iface = R6::R6Class(
     }
   ),
   active = list(
+    #' @field url The current url of the server.
     url = function() {
       glue::glue("http://{private$ip}:{private$port}")
     }
   )
 )
 
+#' Create a livecode server for broadcasting a file
+#'
+#' @param file Path to file to broadcast.
+#' @param ip ip of the server, defaults to the top result of `get_interfaces`.
+#' @param port port of the server, defaults to a random value.
+#' @param bitly should a bitly bit link be created for the server.
+#' @param auto_save should the broadcast file be auto saved update tic.
+#' @param interval page update interval in seconds.
+#' @param template page template to use.
+#'
 #' @export
+
 serve_file = function(file, ip, port, bitly = FALSE, auto_save = TRUE, template = "prism", interval = 2) {
   lc_server_iface$new(file, ip, port, interval, template, bitly, auto_save)
 }
