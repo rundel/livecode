@@ -17,7 +17,7 @@ serve_file(
 \arguments{
 \item{file}{Path to file to broadcast.}
 
-\item{ip}{ip of the server, defaults to the top result of `get_interfaces`.}
+\item{ip}{ip of the server, defaults to the top result of `network_interfaces`.}
 
 \item{port}{port of the server, defaults to a random value.}
 

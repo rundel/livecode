@@ -37,7 +37,6 @@ FileCache = R6::R6Class(
   )
 )
 
-#' @export
 file_cache = function(path, file_id = NULL) {
   FileCache$new(path, file_id)
 }

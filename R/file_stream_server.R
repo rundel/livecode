@@ -192,11 +192,11 @@ lc_server_iface = R6::R6Class(
 
     init_ip = function(ip) {
       if (missing(ip)) {
-        ip = get_interfaces()[["ip"]][1]
+        ip = network_interfaces()[["ip"]][1]
 
         usethis::ui_info( c(
           "No ip address provided, using {usethis::ui_value(ip)}",
-          "(If this does not work check available ips using {usethis::ui_code(\"get_interfaces()\")})"
+          "(If this does not work check available ips using {usethis::ui_code(\"network_interfaces()\")})"
         ))
       }
 
@@ -262,7 +262,7 @@ lc_server_iface = R6::R6Class(
     #' Creates a new livecode server
     #'
     #' @param file Path to file to broadcast.
-    #' @param ip ip of the server, defaults to the top result of `get_interfaces`.
+    #' @param ip ip of the server, defaults to the top result of `network_interfaces`.
     #' @param port port of the server, defaults to a random value.
     #' @param interval page update interval in seconds.
     #' @param template page template to use.
@@ -381,7 +381,7 @@ lc_server_iface = R6::R6Class(
 #' Create a livecode server for broadcasting a file
 #'
 #' @param file Path to file to broadcast.
-#' @param ip ip of the server, defaults to the top result of `get_interfaces`.
+#' @param ip ip of the server, defaults to the top result of `network_interfaces`.
 #' @param port port of the server, defaults to a random value.
 #' @param bitly should a bitly bit link be created for the server.
 #' @param auto_save should the broadcast file be auto saved update tic.

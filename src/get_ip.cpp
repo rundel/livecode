@@ -6,7 +6,6 @@
 #include <string.h>
 #include <arpa/inet.h>
 
-//' @export
 // [[Rcpp::export]]
 Rcpp::CharacterVector get_ipv4() {
   Rcpp::CharacterVector ifaces;

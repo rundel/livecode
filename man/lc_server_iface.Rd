@@ -48,7 +48,7 @@ Creates a new livecode server
 \describe{
 \item{\code{file}}{Path to file to broadcast.}
 
-\item{\code{ip}}{ip of the server, defaults to the top result of `get_interfaces`.}
+\item{\code{ip}}{ip of the server, defaults to the top result of `network_interfaces`.}
 
 \item{\code{port}}{port of the server, defaults to a random value.}
 

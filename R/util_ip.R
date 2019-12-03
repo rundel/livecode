@@ -71,9 +71,15 @@ iface_type = function(iface) {
 }
 
 
+#' List available network interfaces
+#'
+#' This function attempts to order the interfaces using a relative priority
+#' based on the ip type, interface type, and then interface name. The goal is
+#' to favor the interface that is most "open" / accessible.
+#'
+#' @export
 
-
-get_interfaces = function() {
+network_interfaces = function() {
   ips = get_ipv4()
   types = ip_type(ips)
 
@@ -90,8 +96,9 @@ get_interfaces = function() {
   df[order(df[["ip_type"]], df[["iface_type"]], df[["interface"]]),]
 }
 
-print_interfaces = function() {
 
+
+print_interfaces = function() {
   usethis:::hd_line("Network interfaces:")
   purrr::pwalk(
     get_interfaces(),
@@ -103,7 +110,6 @@ print_interfaces = function() {
       )
     }
   )
-
 }
 
 

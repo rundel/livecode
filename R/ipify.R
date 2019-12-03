@@ -16,7 +16,6 @@ ipify_api_get_ipv6 = function() {
   httr::content(res, encoding = "UTF-8")
 }
 
-#' @export
 get_external_ip = function(type = c("ipv4", "ipv6")) {
   type = match.arg(type)
   switch(
