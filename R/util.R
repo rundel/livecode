@@ -3,10 +3,13 @@ is_rstudio = function () {
 }
 
 get_browser = function() {
-  if (is_rstudio())
-    rstudioapi::viewer
-  else
-    getOption("browser")
+  #if (is_rstudio())
+  #  rstudioapi::viewer
+  #else
+  #  getOption("browser")
+
+  # Use system browser until sandboxing is fixed
+  getOption("browser")
 }
 
 pkg_resource = function(..., must_work = FALSE) {
