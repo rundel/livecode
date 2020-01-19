@@ -194,22 +194,15 @@ lc_server_iface = R6::R6Class(
       if (missing(ip)) {
         ip = network_interfaces()[["ip"]][1]
 
-        usethis::ui_info( c(
-          "No ip address provided, using {usethis::ui_value(ip)}",
-          "(If this does not work check available ips using {usethis::ui_code(\"network_interfaces()\")})"
-        ))
+        #usethis::ui_info( c(
+        #  "No ip address provided, using {usethis::ui_value(ip)}",
+        #  "(If this does not work check available ips using {usethis::ui_code(\"network_interfaces()\")})"
+        #))
       }
 
       if (is.na(iptools::ip_classify(ip))) {
         usethis::ui_stop( paste(
           "Invalid ip address provided ({usethis::ui_value(ip)})."
-        ) )
-      }
-
-      if (is_ip_private(ip)) {
-        usethis::ui_info( paste(
-          "The current ip address ({usethis::ui_value(ip)}) for the server is private,",
-          "only users on the same local network are likely to be able to connect."
         ) )
       }
 
@@ -220,9 +213,9 @@ lc_server_iface = R6::R6Class(
       if (missing(port)) {
         port = httpuv::randomPort(host = private$ip)
 
-        usethis::ui_info( paste(
-          "No port provided, using port {usethis::ui_value(port)}."
-        ))
+        #usethis::ui_info( paste(
+        #  "No port provided, using port {usethis::ui_value(port)}."
+        #))
       }
 
       port = as.integer(port)
@@ -252,6 +245,14 @@ lc_server_iface = R6::R6Class(
         "Started sharing {usethis::ui_value(fs::path_file(private$file))}",
         "at {usethis::ui_value(self$url)}."
       ) )
+
+      if (is_ip_private(private$ip)) {
+        usethis::ui_oops( paste(
+          "The current ip address ({usethis::ui_value(private$ip)}) for the server is private,",
+          "only users on the same local network are likely to be able to connect."
+        ) )
+      }
+
 
       later::later(~browseURL(self$url, browser = get_browser()), 1)
     }
