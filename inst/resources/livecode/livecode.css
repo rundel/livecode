@@ -1,0 +1,10 @@
+body {
+  font-family: 'Nunito', sans-serif;
+  font-size: 16px;
+}
+
+.noty_body h1,h2,h3,p {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+}
+
