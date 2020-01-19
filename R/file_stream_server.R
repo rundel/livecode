@@ -95,7 +95,8 @@ file_stream_server = function(host, port, file, file_id, interval = 3, template 
       list(
         status = 200L,
         headers = list(
-          'Content-Type' = 'text/html'
+          #'Content-Type' = 'text/html'
+          'Content-Type'='text/html; charset=UTF-8'
         ),
         body = page
       )
