@@ -314,9 +314,9 @@ lc_server_iface = R6::R6Class(
     #' @param timeout how long should the message stay on screen in seconds.
     #' @param type message type (`alert`, `success`, `warning`, `error`, `info`).
     #' @param theme message theme (See [here](https://ned.im/noty/#/themes) for options)
-    send_msg = function(text, timeout = 0, type = "alert", theme = "semanticui") {
+    send_msg = function(text, timeout = 0, type = "info", theme = "bootstrap-v4", layout = "topRight", ...) {
       private$server$add_msg(
-        noty_msg$new(text = text, type = type, timeout = timeout, theme = theme)
+        noty_msg$new(text = text, type = type, timeout = timeout, theme = theme, layout = layout, ...)
       )
     },
 
@@ -375,7 +375,14 @@ lc_server_iface = R6::R6Class(
   active = list(
     #' @field url The current url of the server.
     url = function() {
-      glue::glue("http://{private$ip}:{private$port}")
+      if (!is.null(private$bitly_url))
+        private$bitly_url
+      else
+        glue::glue("http://{private$ip}:{private$port}")
+    },
+    #' @field path The path of the file being served.
+    path = function() {
+      private$file
     }
   )
 )
@@ -392,8 +399,23 @@ lc_server_iface = R6::R6Class(
 #'
 #' @export
 
-serve_file = function(file, ip, port, bitly = FALSE, auto_save = TRUE, template = "prism", interval = 2) {
-  lc_server_iface$new(file, ip, port, interval, template, bitly, auto_save)
+serve_file = function(file, ip, port, bitly = FALSE, auto_save = TRUE, template = "prism", interval = 1) {
+  z = lc_server_iface$new(file, ip, port, interval, template, bitly, auto_save)
+
+  z$send_msg(
+    markdown::markdownToHTML(
+      text = c(
+        "## Welcome to `livecode`!",
+        "",
+        glue::glue("Serving `{fs::path_file(z$path)}` at"),
+        glue::glue("*[{sub('https?://', '', z$url)}]({z$url})*")
+      ), fragment.only = TRUE
+    ),
+    #closeWith = list("button")
+    closeWith = list("button")
+  )
+
+  z
 }
 
 

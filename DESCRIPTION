@@ -21,7 +21,8 @@ Imports:
     httr,
     purrr,
     Rcpp,
-    iptools
+    iptools,
+    markdown
 RoxygenNote: 7.0.2
 LinkingTo: 
     Rcpp
