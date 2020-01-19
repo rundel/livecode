@@ -11,43 +11,44 @@ noty_msg <- R6::R6Class(
                 "nest", "metroui", "semanticui",
                 "light", "bootstrap-v3", "bootstrap-v4"),
       timeout = 0,
-      progressBar = FALSE
-      #closeWith = c("click", "button")
+      progressBar = FALSE,
+      ...
     ) {
       private$text = text
-      private$type = match.arg(type)
-      private$layout = match.arg(layout)
-      private$theme = match.arg(theme)
-      private$timeout = timeout
-      private$progressBar = progressBar
-      #private$closeWith = match.arg(closeWith, several.ok = TRUE)
+      private$args = c(
+        list(
+          type = match.arg(type),
+          layout = match.arg(layout),
+          theme = match.arg(theme),
+          timeout = timeout,
+          progressBar = progressBar
+        ),
+        list(...)
+      )
     },
     print = function(...) {
       usethis:::cat_line(
         crayon::bold("Noty Message: "),
         usethis::ui_value(private$text)
       )
-      usethis:::kv_line("Type", private$type)
-      usethis:::kv_line("Layout", private$layout)
-      usethis:::kv_line("Theme", private$theme)
-      usethis:::kv_line("Timeout", private$timeout)
-      usethis:::kv_line("Prorgessbar", private$progressBar)
-      #usethis:::kv_line("Closewith", private$closeWith)
+      purrr::walk2(
+        names(private$args), private$args,
+        ~usethis:::kv_line(.x, .y)
+      )
     },
     get_msg = function() {
-      as.list(private)
+      c(
+        list(text = private$text),
+        private$args
+      )
     },
     get_text = function() {
       private$text
     }
   ),
   private = list(
-    type = character(),
-    layout = character(),
-    theme = character(),
     text = character(),
-    timeout = integer(),
-    progressBar = logical()
+    args = list()
     #closeWith = character()
   )
 )
