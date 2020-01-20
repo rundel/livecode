@@ -17,7 +17,7 @@ remotes::install_github("rundel/livecode")
 ``` r
 # From RStudio with an open R script
 server = livecode::serve_file()
-#> ✔ Started sharing 'file_stream_server.R' at 'http://192.168.1.128:30000'.
+#> ✔ Started sharing 'example.R' at 'http://192.168.1.128:30000'.
 #> ✖ The current ip address ('192.168.1.128') for the server is private, only users on the same local network are likely to be able to connect.
 
 # Once started, send messages to your users.
