@@ -9,7 +9,7 @@ body {
 }
 
 .noty_body a, a:visited {
-/*  text-decoration: none;*/
+
   color: inherit;
 }
 
@@ -22,4 +22,5 @@ body {
 
 .noty_body .server_link a, a:visited {
   font-size: 130%;
+  text-decoration: none;
 }
