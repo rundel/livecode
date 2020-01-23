@@ -12,6 +12,8 @@ The interface also provides additional tools for sending messages.
 \if{html}{\out{<div class="r6-active-bindings">}}
 \describe{
 \item{\code{url}}{The current url of the server.}
+
+\item{\code{path}}{The path of the file being served.}
 }
 \if{html}{\out{</div>}}
 }
@@ -19,9 +21,9 @@ The interface also provides additional tools for sending messages.
 \subsection{Public methods}{
 \itemize{
 \item \href{#method-new}{\code{lc_server_iface$new()}}
+\item \href{#method-open}{\code{lc_server_iface$open()}}
 \item \href{#method-print}{\code{lc_server_iface$print()}}
 \item \href{#method-send_msg}{\code{lc_server_iface$send_msg()}}
-\item \href{#method-send_timer}{\code{lc_server_iface$send_timer()}}
 \item \href{#method-is_running}{\code{lc_server_iface$is_running()}}
 \item \href{#method-stop}{\code{lc_server_iface$stop()}}
 \item \href{#method-restart}{\code{lc_server_iface$restart()}}
@@ -64,6 +66,15 @@ Creates a new livecode server
 }
 }
 \if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-open"></a>}}
+\subsection{Method \code{open()}}{
+Open server in browser
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{lc_server_iface$open()}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-print"></a>}}
 \subsection{Method \code{print()}}{
 Class print method
@@ -79,9 +90,11 @@ Send a noty message to all connected users on the next update tic.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{lc_server_iface$send_msg(
   text,
-  timeout = 0,
-  type = "alert",
-  theme = "semanticui"
+  type = "info",
+  theme = "bootstrap-v4",
+  layout = "topRight",
+  ...,
+  parse_md = TRUE
 )}\if{html}{\out{</div>}}
 }
 
@@ -90,38 +103,15 @@ Send a noty message to all connected users on the next update tic.
 \describe{
 \item{\code{text}}{text of the message.}
 
-\item{\code{timeout}}{how long should the message stay on screen in seconds.}
-
 \item{\code{type}}{message type (`alert`, `success`, `warning`, `error`, `info`).}
 
 \item{\code{theme}}{message theme (See [here](https://ned.im/noty/#/themes) for options)}
-}
-\if{html}{\out{</div>}}
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-send_timer"></a>}}
-\subsection{Method \code{send_timer()}}{
-Send a noty message with a built in countdown timer on the next update tic.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{lc_server_iface$send_timer(
-  text,
-  timeout = 30,
-  type = "error",
-  theme = "semanticui"
-)}\if{html}{\out{</div>}}
-}
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{text}}{text of the message.}
+\item{\code{layout}}{message location.}
 
-\item{\code{timeout}}{how long should the countdown timer take in seconds.}
+\item{\code{...}}{addition noty arguments.}
 
-\item{\code{type}}{message type (`alert`, `success`, `warning`, `error`, `info`).}
-
-\item{\code{theme}}{message theme (See [here](https://ned.im/noty/#/themes) for options)}
+\item{\code{parse_md}}{should message text be processed as markdown before sending.}
 }
 \if{html}{\out{</div>}}
 }

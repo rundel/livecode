@@ -11,7 +11,7 @@ serve_file(
   bitly = FALSE,
   auto_save = TRUE,
   template = "prism",
-  interval = 2
+  interval = 1
 )
 }
 \arguments{

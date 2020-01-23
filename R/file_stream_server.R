@@ -323,8 +323,9 @@ lc_server_iface = R6::R6Class(
     #' @param type message type (`alert`, `success`, `warning`, `error`, `info`).
     #' @param theme message theme (See [here](https://ned.im/noty/#/themes) for options)
     #' @param layout message location.
+    #' @param ... addition noty arguments.
+    #' @param parse_md should message text be processed as markdown before sending.
     send_msg = function(text,
-                        timeout = 0,
                         type = "info",
                         theme = "bootstrap-v4",
                         layout = "topRight",
@@ -357,21 +358,6 @@ lc_server_iface = R6::R6Class(
         do.call(noty_msg$new, args)
       )
     },
-
-    #' @description
-    #' Send a noty message with a built in countdown timer on the next update tic.
-    #'
-    #' @param text text of the message.
-    #' @param timeout how long should the countdown timer take in seconds.
-    #' @param type message type (`alert`, `success`, `warning`, `error`, `info`).
-    #' @param theme message theme (See [here](https://ned.im/noty/#/themes) for options)
-    send_timer = function(text, timeout = 30, type = "error", theme = "semanticui") {
-      private$server$add_msg(
-        noty_msg$new(text = text, type = type, theme = theme,
-                     timeout = timeout*1000, progressBar = TRUE)
-      )
-    },
-
 
     #' @description
     #' Determine if the server is running.
