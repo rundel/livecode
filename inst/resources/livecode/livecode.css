@@ -9,7 +9,17 @@ body {
 }
 
 .noty_body a, a:visited {
-  font-size: 130%;
-  text-decoration: none;
+/*  text-decoration: none;*/
   color: inherit;
+}
+
+.noty_body .server_link {
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.noty_body .server_link a, a:visited {
+  font-size: 130%;
 }
