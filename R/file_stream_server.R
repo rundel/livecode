@@ -255,7 +255,7 @@ lc_server_iface = R6::R6Class(
       }
 
 
-      later::later(~browseURL(self$url, browser = get_browser()), 1)
+      later::later(~self$open(), 1)
     }
 
   ),
@@ -287,6 +287,15 @@ lc_server_iface = R6::R6Class(
     },
 
     #' @description
+    #' Open server in browser
+    open = function() {
+      if (self$is_running())
+        browseURL(self$url, browser = get_browser())
+      else
+        usethis::ui_stop("The server is not currently running!")
+    },
+
+    #' @description
     #' Class print method
     print = function() {
       usethis:::cat_line(
@@ -311,12 +320,41 @@ lc_server_iface = R6::R6Class(
     #' Send a noty message to all connected users on the next update tic.
     #'
     #' @param text text of the message.
-    #' @param timeout how long should the message stay on screen in seconds.
     #' @param type message type (`alert`, `success`, `warning`, `error`, `info`).
     #' @param theme message theme (See [here](https://ned.im/noty/#/themes) for options)
-    send_msg = function(text, timeout = 0, type = "info", theme = "bootstrap-v4", layout = "topRight", ...) {
+    #' @param layout message location.
+    send_msg = function(text,
+                        timeout = 0,
+                        type = "info",
+                        theme = "bootstrap-v4",
+                        layout = "topRight",
+                        ...,
+                        parse_md = TRUE) {
+      if (parse_md) {
+        text = markdown::markdownToHTML(
+          text = text,
+          fragment.only = TRUE,
+          extensions = markdown::markdownExtensions()
+        )
+      } else {
+        text = paste(text, collapse = "\n")
+      }
+
+      args = c(
+        list(text = text, type = type, theme = theme, layout = layout),
+        list(...)
+      )
+
+      text_has_link = grepl("<a ", text)
+      closeWith_used = "closeWith" %in% names(args)
+
+      # Message closes with a button click
+      if (text_has_link & !closeWith_used)
+        args[["closeWith"]] = list("button")
+
+
       private$server$add_msg(
-        noty_msg$new(text = text, type = type, timeout = timeout, theme = theme, layout = layout, ...)
+        do.call(noty_msg$new, args)
       )
     },
 
@@ -403,16 +441,19 @@ serve_file = function(file, ip, port, bitly = FALSE, auto_save = TRUE, template 
   z = lc_server_iface$new(file, ip, port, interval, template, bitly, auto_save)
 
   z$send_msg(
-    markdown::markdownToHTML(
-      text = c(
-        "## Welcome to `livecode`!",
-        "",
-        glue::glue("Serving `{fs::path_file(z$path)}` at"),
-        glue::glue("*[{sub('https?://', '', z$url)}]({z$url})*")
-      ), fragment.only = TRUE
-    ),
-    #closeWith = list("button")
-    closeWith = list("button")
+    text = c(
+      "## Welcome to `livecode`!",
+      "",
+      glue::glue("Serving `{fs::path_file(z$path)}` at"),
+      "",
+      glue::glue(
+        "<div class='server_link'>",
+        "<a href='{z$url}'>",
+        "{z$url}",
+        "</a>",
+        "</div>"
+      )
+    )
   )
 
   z
