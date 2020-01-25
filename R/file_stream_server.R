@@ -236,6 +236,26 @@ lc_server_iface = R6::R6Class(
         private$bitly_url = result(res)
     },
 
+    init_auto_save = function() {
+
+
+      if (!check_strip_trailing_ws())
+        return()
+
+      opt_name = usethis::ui_value('Strip trailing horizontal whitespace when saving')
+      if (using_project())
+        menu = "Tools > Project Options > Code Editing"
+      else
+        menu = "Tools > Global Options > Code > Saving"
+
+
+      usethis::ui_oops( paste(
+        "You are running livecode with {usethis::ui_code('auto_save=TRUE')} with the {opt_name}",
+        "option checked in RStudio.\n This can result in undesirable behavior while you broadcast.",
+        "To resolve this, from RStudio's menu select:\n {menu} and uncheck {opt_name}."
+      ) )
+    },
+
     start_server = function() {
       private$server = file_stream_server(
         private$ip, private$port, private$file, private$file_id,
@@ -284,6 +304,9 @@ lc_server_iface = R6::R6Class(
 
       if (bitly)
         private$init_bitly()
+
+      if (auto_save)
+        private$init_auto_save()
     },
 
     #' @description
