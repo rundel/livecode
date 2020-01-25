@@ -1,6 +1,20 @@
+`%||%` <- function(x, y) {
+  if (is.null(x) || length(x) <= 0) y else x
+}
+
 is_rstudio = function () {
   requireNamespace("rstudioapi", quietly = TRUE) && rstudioapi::isAvailable()
 }
+
+
+using_project = function() {
+  if (is_rstudio())
+    !is.null(rstudioapi::getActiveProject())
+  else
+    FALSE
+}
+
+
 
 get_browser = function() {
   #if (is_rstudio())
