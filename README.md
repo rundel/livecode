@@ -2,7 +2,11 @@
 # livecode
 
 <!-- badges: start -->
+![](https://img.shields.io/badge/lifecycle-experimental-orange.svg)
 <!-- badges: end -->
+
+![](man/figures/livecode.png)<!-- -->
+
 
 ## Installation
 
