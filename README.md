@@ -16,7 +16,7 @@ You can install the development version of `livecode` from this GitHub repositor
 remotes::install_github("rundel/livecode")
 ```
 
-## Example
+## Usage
 
 ``` r
 # From RStudio with an open R script
