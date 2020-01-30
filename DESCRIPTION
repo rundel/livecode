@@ -1,12 +1,12 @@
 Package: livecode
-Title: Broadcast a local R (or other text) document over the web and provide live updates as it is edited.
+Title: Broadcast a source file to multiple concurrant users
 Version: 0.1.0.9000
 Authors@R: 
     person(given = "Colin",
            family = "Rundel",
            role = c("aut", "cre"),
            email = "rundel@gmail.com")
-Description: What the package does (one paragraph).
+Description: Broadcast a local R (or other text) document over the web and provide live updates as it is edited.
 License: GPL-3
 Encoding: UTF-8
 LazyData: true
