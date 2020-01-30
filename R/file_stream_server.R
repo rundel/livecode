@@ -243,8 +243,6 @@ lc_server_iface = R6::R6Class(
     },
 
     init_auto_save = function() {
-
-
       if (!check_strip_trailing_ws())
         return()
 
