@@ -252,7 +252,6 @@ lc_server_iface = R6::R6Class(
       else
         menu = "Tools > Global Options > Code > Saving"
 
-
       usethis::ui_oops( paste(
         "You are running livecode with {usethis::ui_code('auto_save=TRUE')} with the {opt_name}",
         "option checked in RStudio.\n This can result in undesirable behavior while you broadcast.",
@@ -454,22 +453,25 @@ serve_file = function(file, ip, port, bitly = FALSE, auto_save = TRUE, template 
   z = lc_server_iface$new(file, ip, port, interval, template, bitly, auto_save)
 
   z$send_msg(
-    text = c(
-      "## Welcome to `livecode`!",
-      "",
-      glue::glue("Serving `{fs::path_file(z$path)}` at"),
-      "",
-      glue::glue(
-        "<div class='server_link'>",
-        "<a href='{z$url}'>",
-        "{z$url}",
-        "</a>",
-        "</div>"
-      )
-    )
+    text = welcome_msg(z)
   )
 
   z
 }
 
+welcome_msg = function(server) {
+  c(
+    "## Welcome to `livecode`!",
+    "",
+    glue::glue("Serving `{fs::path_file(server$path)}` at"),
+    "",
+    glue::glue(
+      "<div class='server_link'>",
+      "<a href='{server$url}'>",
+      "{server$url}",
+      "</a>",
+      "</div>"
+    )
+  )
+}
 
