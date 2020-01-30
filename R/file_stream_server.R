@@ -232,8 +232,14 @@ lc_server_iface = R6::R6Class(
 
     init_bitly = function() {
       res = purrr::safely(bitly_shorten)(self$url)
-      if (succeeded(res))
+      if (succeeded(res)) {
         private$bitly_url = result(res)
+      } else {
+        usethis::ui_oops( paste0(
+          "Failed to create bitlink: ",
+          error_msg(res)
+        ) )
+      }
     },
 
     init_auto_save = function() {
