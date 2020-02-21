@@ -3,6 +3,8 @@
 
 <!-- badges: start -->
 
+[![R build
+status](https://github.com/rundel/livecode/workflows/R-CMD-check/badge.svg)](https://github.com/rundel/livecode/actions?query=workflow%3AR-CMD-check)
 ![](https://img.shields.io/badge/lifecycle-experimental-orange.svg)
 <!-- badges: end -->
 
