@@ -32,12 +32,10 @@ std::string sock_addr_to_str(SOCKET_ADDRESS addr) {
 
 
 Rcpp::CharacterVector get_ipv4_impl() {
-  Rcpp::CharacterVector ifaces;
-  Rcpp::CharacterVector addrs;
+  Rcpp::CharacterVector ifaces, addrs, descs;
 
   unsigned long int buf_len = 0;
   GetAdaptersAddresses(AF_INET, 0, NULL, NULL, &buf_len);
-  Rcpp::Rcout << "buf_len: " << buf_len << "\n";
   if (buf_len == 0)
     Rcpp::stop("Retriving network adaptors failed!");
 
@@ -51,15 +49,13 @@ Rcpp::CharacterVector get_ipv4_impl() {
   while (adapts != NULL) {
     ifaces.push_back( wide_to_str(adapts->FriendlyName) );
     addrs.push_back( sock_addr_to_str(adapts->FirstUnicastAddress->Address) );
-
-    //Rcpp::Rcout << "Name: " << wide_to_str(adapts->FriendlyName) << "\n";
-    //Rcpp::Rcout << "Desc: " << wide_to_str(adapts->Description) << "\n";
-    //Rcpp::Rcout << "Addr: " << sock_addr_to_str(adapts->FirstUnicastAddress->Address) << "\n";
+    descs.push_back( wide_to_str(adapts->Description));
 
     adapts = adapts->Next;
   };
 
   addrs.attr("names") = ifaces;
+  addrs.attr("descs") = descs;
   return addrs;
 }
 
