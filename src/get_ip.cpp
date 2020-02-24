@@ -36,7 +36,6 @@ Rcpp::CharacterVector get_ipv4_impl() {
 
   unsigned long int buf_len = 0;
   GetAdaptersAddresses(AF_INET, 0, NULL, NULL, &buf_len);
-  Rcpp::Rcout << "buf_len: " << buf_len << "\n";
   if (buf_len == 0)
     Rcpp::stop("Retriving network adaptors failed!");
 
