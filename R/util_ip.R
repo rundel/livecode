@@ -60,14 +60,21 @@ iface_type = function(iface) {
   iface = tolower(iface)
   type = rep("other", length(iface))
 
-  # Based on "Predictable Network Interface Device Names"
-  type[grepl("^en", iface)] = "ethernet"
-  type[grepl("^wl", iface)] = "wlan"
-  type[grepl("^ww", iface)] = "wwan"
-  type[grepl("^lo", iface)] = "loopback"
+  if (.Platform$OS.type != "windows") {
+    # Based on "Predictable Network Interface Device Names"
+    type[grepl("^en", iface)] = "ethernet"
+    type[grepl("^wl", iface)] = "wireless"
+    type[grepl("^ww", iface)] = "wireless"
+    type[grepl("^lo", iface)] = "loopback"
+  } else { # Windows
+    # No clear convention that I can determine
+    type[grepl("ethernet", iface)] = "ethernet"
+    type[grepl("wi(-)?fi", iface)] = "wireless"
+    type[grepl("loopback", iface)] = "loopback"
+  }
 
   # ordered based on preference heuristic
-  factor(type, levels = c("ethernet", "wlan", "wwan", "other", "loopback"))
+  factor(type, levels = c("ethernet", "wireless", "other", "loopback"))
 }
 
 

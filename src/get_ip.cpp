@@ -47,15 +47,18 @@ Rcpp::CharacterVector get_ipv4_impl() {
     Rcpp::stop("Retriving network adaptors failed!");
 
   while (adapts != NULL) {
-    ifaces.push_back( wide_to_str(adapts->FriendlyName) );
+    ifaces.push_back(
+      wide_to_str(adapts->FriendlyName) + " (" +
+        wide_to_str(adapts->Description) + ")"
+    );
     addrs.push_back( sock_addr_to_str(adapts->FirstUnicastAddress->Address) );
-    descs.push_back( wide_to_str(adapts->Description));
+    //descs.push_back( wide_to_str(adapts->Description));
 
     adapts = adapts->Next;
   };
 
   addrs.attr("names") = ifaces;
-  addrs.attr("descs") = descs;
+  //addrs.attr("descs") = descs;
   return addrs;
 }
 
