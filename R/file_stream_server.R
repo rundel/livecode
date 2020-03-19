@@ -1,5 +1,6 @@
 lc_server <- R6::R6Class(
   "LiveCodeServer",
+
   cloneable = FALSE,
   inherit = httpuv:::WebServer,
   public = list(
@@ -18,6 +19,7 @@ lc_server <- R6::R6Class(
     },
 
     add_msg = function(m) {
+
 
       if (is.character(m) & length(m) == 1) {
         m = noty_msg$new(m)
@@ -213,7 +215,6 @@ lc_server_iface = R6::R6Class(
     init_port = function(port) {
       if (missing(port)) {
         port = httpuv::randomPort(host = private$ip)
-
         #usethis::ui_info( paste(
         #  "No port provided, using port {usethis::ui_value(port)}."
         #))

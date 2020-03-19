@@ -1,4 +1,4 @@
-# 
+#
 # map_value = function(value, map = list()) {
 #   if (length(value) == 0) {
 #     value
@@ -8,13 +8,13 @@
 #     value
 #   }
 # }
-# 
+#
 # extract_dcf_value = function(file, key, default = NULL) {
 #   lines = readLines(file)
 #   key_regex = paste0("^",key, ": ")
 #   sub = grepl(key_regex, lines)
 #   value = sub(key_regex, "", lines[sub])
-# 
+#
 #   if (length(value) == 0)
 #     value = default
 #   else if (length(value) > 1) {
@@ -24,10 +24,10 @@
 #     ) )
 #     value = value[length(value)]
 #   }
-# 
+#
 #   value
 # }
-# 
+#
 # get_project_option = function(x, default = NULL,
 #                               map = list("Yes" = TRUE, "No" = FALSE)) {
 #   if (using_project()) {
@@ -38,7 +38,7 @@
 #     default
 #   }
 # }
-# 
+#
 # get_user_option = function(x, default = NULL) {
 #   if (!is_rstudio()) {
 #     default
