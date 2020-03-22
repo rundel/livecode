@@ -9,5 +9,5 @@ network_interfaces()
 \description{
 This function attempts to order the interfaces using a relative priority
 based on the ip type, interface type, and then interface name. The goal is
-to favor the interface that is most "open" / accessible.
+to favor the interface that is most "accessible".
 }

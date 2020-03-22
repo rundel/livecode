@@ -60,14 +60,21 @@ iface_type = function(iface) {
   iface = tolower(iface)
   type = rep("other", length(iface))
 
-  # Based on "Predictable Network Interface Device Names"
-  type[grepl("^en", iface)] = "ethernet"
-  type[grepl("^wl", iface)] = "wlan"
-  type[grepl("^ww", iface)] = "wwan"
-  type[grepl("^lo", iface)] = "loopback"
+  if (.Platform$OS.type != "windows") {
+    # Based on "Predictable Network Interface Device Names"
+    type[grepl("^en", iface)] = "ethernet"
+    type[grepl("^wl", iface)] = "wireless"
+    type[grepl("^ww", iface)] = "wireless"
+    type[grepl("^lo", iface)] = "loopback"
+  } else { # Windows
+    # No clear convention that I can determine
+    type[grepl("ethernet", iface)] = "ethernet"
+    type[grepl("wi(-)?fi", iface)] = "wireless"
+    type[grepl("loopback", iface)] = "loopback"
+  }
 
   # ordered based on preference heuristic
-  factor(type, levels = c("ethernet", "wlan", "wwan", "other", "loopback"))
+  factor(type, levels = c("ethernet", "wireless", "other", "loopback"))
 }
 
 
@@ -75,7 +82,7 @@ iface_type = function(iface) {
 #'
 #' This function attempts to order the interfaces using a relative priority
 #' based on the ip type, interface type, and then interface name. The goal is
-#' to favor the interface that is most "open" / accessible.
+#' to favor the interface that is most "accessible".
 #'
 #' @export
 
@@ -98,18 +105,18 @@ network_interfaces = function() {
 
 
 
-print_interfaces = function() {
-  usethis:::hd_line("Network interfaces:")
-  purrr::pwalk(
-    get_interfaces(),
-    function(interface, iface_type, ip, ip_type) {
-      usethis:::cat_line(
-        "* ", interface, ": ",
-        usethis::ui_value(ip),
-        " (", crayon::blurred(ip_type) ,")"
-      )
-    }
-  )
-}
+# print_interfaces = function() {
+#   usethis:::hd_line("Network interfaces:")
+#   purrr::pwalk(
+#     network_interfaces(),
+#     function(interface, iface_type, ip, ip_type) {
+#       usethis:::cat_line(
+#         "* ", interface, ": ",
+#         usethis::ui_value(ip),
+#         " (", crayon::blurred(ip_type) ,")"
+#       )
+#     }
+#   )
+# }
 
 
