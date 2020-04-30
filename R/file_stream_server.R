@@ -305,22 +305,12 @@ lc_server_iface = R6::R6Class(
     #' @description
     #' Class print method
     print = function() {
-      usethis::ui_line(
-        crayon::bold("File Streaming Server: "),
-        ifelse(
-          private$server$isRunning(),
-          "(running)",
-          "(stopped)"
-        )
-      )
-      usethis:::kv_line("file", private$file)
-
-      if (private$server$isRunning()) {
-        usethis:::kv_line("url", self$url)
-        usethis:::kv_line("ip type", as.character(ip_type(private$ip)))
-        if (!is.null(private$bitly_url))
-          usethis:::kv_line("bitly url", private$bitly_url)
-      }
+      usethis::ui_line( paste(
+        crayon::bold("livecode server:"),
+        crayon::red(fs::path_file(private$file)),
+        "@",
+        crayon::underline(crayon::blue(self$url))
+      ) )
     },
 
     #' @description
@@ -479,7 +469,7 @@ serve_file = function(file, ip, port, interval = 1,
 
   server$send_msg(text = welcome_msg)
 
-  server
+  invisible(server)
 }
 
 
