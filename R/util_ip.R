@@ -102,21 +102,3 @@ network_interfaces = function() {
 
   df[order(df[["ip_type"]], df[["iface_type"]], df[["interface"]]),]
 }
-
-
-
-# print_interfaces = function() {
-#   usethis:::hd_line("Network interfaces:")
-#   purrr::pwalk(
-#     network_interfaces(),
-#     function(interface, iface_type, ip, ip_type) {
-#       usethis:::cat_line(
-#         "* ", interface, ": ",
-#         usethis::ui_value(ip),
-#         " (", crayon::blurred(ip_type) ,")"
-#       )
-#     }
-#   )
-# }
-
-
