@@ -1,7 +1,11 @@
-`%||%` <- function(x, y) {
-  if (is.null(x) || length(x) <= 0) y else x
+`%||%` = function(x, y) {
+  if (is.null(x) || length(x) <= 0) 
+    y 
+  else 
+    x
 }
 
+# TODO: change to using_rstudio
 is_rstudio = function () {
   requireNamespace("rstudioapi", quietly = TRUE) && rstudioapi::isAvailable()
 }
