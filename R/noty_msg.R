@@ -27,7 +27,7 @@ noty_msg <- R6::R6Class(
       )
     },
     print = function(...) {
-      usethis:::cat_line(
+      usethis::ui_line(
         crayon::bold("Noty Message: "),
         usethis::ui_value(private$text)
       )
