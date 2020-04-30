@@ -255,33 +255,10 @@ lc_server_iface = R6::R6Class(
 
       usethis::ui_oops( paste(
         "You are running livecode with {usethis::ui_code('auto_save=TRUE')} with the {opt_name}",
-        "option checked in RStudio.\n This can result in undesirable behavior while you broadcast.",
+        "option checked in RStudio. This can result in undesirable behavior while you broadcast.\n",
         "To resolve this, from RStudio's menu select:\n {menu} and uncheck {opt_name}."
       ) )
-    },
-
-    start_server = function() {
-      private$server = file_stream_server(
-        private$ip, private$port, private$file, private$file_id,
-        template = private$template, interval = private$interval
-      )
-
-      usethis::ui_done( paste(
-        "Started sharing {usethis::ui_value(fs::path_file(private$file))}",
-        "at {usethis::ui_value(self$url)}."
-      ) )
-
-      if (is_ip_private(private$ip)) {
-        usethis::ui_oops( paste(
-          "The current ip address ({usethis::ui_value(private$ip)}) for the server is private,",
-          "only users on the same local network are likely to be able to connect."
-        ) )
-      }
-
-
-      later::later(~self$open(), 1)
     }
-
   ),
   public = list(
     #' @description
@@ -291,26 +268,29 @@ lc_server_iface = R6::R6Class(
     #' @param ip ip of the server, defaults to the top result of `network_interfaces`.
     #' @param port port of the server, defaults to a random value.
     #' @param interval page update interval in seconds.
-    #' @param template page template to use.
     #' @param bitly should a bitly bit link be created for the server.
     #' @param auto_save should the broadcast file be auto saved update tic.
+    #' @param open_browser should a browser session be opened.
     initialize = function(
-      file, ip, port, interval = 2, template = "prism",
-      bitly = FALSE, auto_save = TRUE
+      file, ip, port, interval = 2,
+      bitly = FALSE, auto_save = TRUE, open_browser = TRUE
     ) {
       private$init_file(file, auto_save)
       private$init_ip(ip)
       private$init_port(port)
 
-      private$template = template
+      private$template = "prism"
       private$interval = interval
-      private$start_server()
+      self$start()
 
       if (bitly)
         private$init_bitly()
 
       if (auto_save)
         private$init_auto_save()
+
+      if (open_browser)
+        later::later(~self$open(), 1)
     },
 
     #' @description
@@ -325,7 +305,7 @@ lc_server_iface = R6::R6Class(
     #' @description
     #' Class print method
     print = function() {
-      usethis:::cat_line(
+      usethis::ui_line(
         crayon::bold("File Streaming Server: "),
         ifelse(
           private$server$isRunning(),
@@ -350,7 +330,7 @@ lc_server_iface = R6::R6Class(
     #' @param type message type (`alert`, `success`, `warning`, `error`, `info`).
     #' @param theme message theme (See [here](https://ned.im/noty/#/themes) for options)
     #' @param layout message location.
-    #' @param ... addition noty arguments.
+    #' @param ... additional noty arguments.
     #' @param parse_md should message text be processed as markdown before sending.
     send_msg = function(text,
                         type = "info",
@@ -394,6 +374,29 @@ lc_server_iface = R6::R6Class(
     },
 
     #' @description
+    #' Start the server
+    start = function() {
+      private$server = file_stream_server(
+        private$ip, private$port, private$file, private$file_id,
+        template = private$template, interval = private$interval
+      )
+
+      usethis::ui_done( paste(
+        "Started sharing {usethis::ui_value(fs::path_file(private$file))}",
+        "at {usethis::ui_value(self$url)}."
+      ) )
+
+      if (is_ip_private(private$ip)) {
+        usethis::ui_oops( paste(
+          "The current ip address ({usethis::ui_value(private$ip)}) for the server is private,",
+          "only users on the same local network are likely to be able to connect."
+        ) )
+      }
+
+      register_server(self)
+    },
+
+    #' @description
     #' Stop the server
     #'
     #' @param warn Should the users be sent a warning that the server is shutting down.
@@ -411,6 +414,8 @@ lc_server_iface = R6::R6Class(
       usethis::ui_done( paste(
         "Stopped server at {usethis::ui_value(self$url)}."
       ) )
+
+      deregister_server(self)
     },
 
     #' @description
@@ -420,7 +425,7 @@ lc_server_iface = R6::R6Class(
         self$stop()
       }
 
-      private$start_server()
+      private$start()
     }
   ),
   active = list(
@@ -443,25 +448,22 @@ lc_server_iface = R6::R6Class(
 #' @param file Path to file to broadcast.
 #' @param ip ip of the server, defaults to the top result of `network_interfaces`.
 #' @param port port of the server, defaults to a random value.
-#' @param bitly should a bitly bit link be created for the server.
-#' @param auto_save should the broadcast file be auto saved update tic.
 #' @param interval page update interval in seconds.
-#' @param template page template to use.
+#' @param bitly should a bitly bit link be created for the server.
+#' @param auto_save should the broadcast file be auto saved during each update tic.
+#' @param open_browser should a browser session be opened.
 #'
 #' @export
 
-serve_file = function(file, ip, port, bitly = FALSE, auto_save = TRUE, template = "prism", interval = 1) {
-  z = lc_server_iface$new(file, ip, port, interval, template, bitly, auto_save)
+serve_file = function(file, ip, port, interval = 1,
+                      bitly = FALSE, auto_save = TRUE,
+                      open_browser = TRUE) {
+  server = lc_server_iface$new(file = file, ip = ip,
+                               port = port, interval = interval,
+                               bitly = bitly, auto_save = auto_save,
+                               open_browser = open_browser)
 
-  z$send_msg(
-    text = welcome_msg(z)
-  )
-
-  z
-}
-
-welcome_msg = function(server) {
-  c(
+  welcome_msg = c(
     "## Welcome to `livecode`!",
     "",
     glue::glue("Serving `{fs::path_file(server$path)}` at"),
@@ -474,5 +476,11 @@ welcome_msg = function(server) {
       "</div>"
     )
   )
+
+  server$send_msg(text = welcome_msg)
+
+  server
 }
+
+
 

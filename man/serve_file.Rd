@@ -8,10 +8,10 @@ serve_file(
   file,
   ip,
   port,
+  interval = 1,
   bitly = FALSE,
   auto_save = TRUE,
-  template = "prism",
-  interval = 1
+  open_browser = TRUE
 )
 }
 \arguments{
@@ -21,13 +21,13 @@ serve_file(
 
 \item{port}{port of the server, defaults to a random value.}
 
+\item{interval}{page update interval in seconds.}
+
 \item{bitly}{should a bitly bit link be created for the server.}
 
-\item{auto_save}{should the broadcast file be auto saved update tic.}
+\item{auto_save}{should the broadcast file be auto saved during each update tic.}
 
-\item{template}{page template to use.}
-
-\item{interval}{page update interval in seconds.}
+\item{open_browser}{should a browser session be opened.}
 }
 \description{
 Create a livecode server for broadcasting a file
