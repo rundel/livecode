@@ -1,5 +1,5 @@
 
-# livecode
+# livecode <img src='man/figures/logo.png' align="right" height="140" />
 
 <!-- badges: start -->
 
@@ -7,6 +7,14 @@
 status](https://github.com/rundel/livecode/workflows/R-CMD-check/badge.svg)](https://github.com/rundel/livecode/actions?query=workflow%3AR-CMD-check)
 ![](https://img.shields.io/badge/lifecycle-experimental-orange.svg)
 <!-- badges: end -->
+
+<br/>
+
+livecode is an R package that enables you to broadcast a local R (or any
+other text) document over the web and provide live updates as it is
+edited.
+
+<br/>
 
 ![](man/figures/livecode.png)<!-- -->
 
