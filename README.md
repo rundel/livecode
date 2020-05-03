@@ -16,7 +16,7 @@ edited.
 
 <br/>
 
-![](man/figures/livecode.png)<!-- -->
+![](man/figures/livecode.png)
 
 ## Installation
 
