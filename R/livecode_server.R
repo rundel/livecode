@@ -118,6 +118,8 @@ livecode_server = R6::R6Class(
       
       if (open_browser)
         later::later(~self$open(), 1)
+      
+      private$server$set_url(self$url)
     },
     
     #' @description

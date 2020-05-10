@@ -31,10 +31,28 @@ msg_server <- R6::R6Class(
         usethis::ui_stop("Invalid message type, must either be a character or noty_msg object.")
       }
       private$msg_queue = append(private$msg_queue, m)
+    },
+    
+    set_filename = function(filename) {
+      private$filename = filename
+    },
+    
+    set_url = function(url) {
+      private$url = url
+    },
+    
+    get_filename = function() {
+      private$filename
+    },
+    
+    get_url = function() {
+      private$url
     }
   ),
   private = list(
-    msg_queue = list()
+    msg_queue = list(),
+    filename = NULL,
+    url = NULL
   )
 )
 
@@ -62,7 +80,12 @@ file_stream_server = function(host, port, file_cache, interval, template = "pris
     
     file_cache$save()
 
-    msg = list(interval = interval)
+    msg = list(
+      interval = interval,
+      url = server$get_url(),
+      filename = file_cache$get_filename()
+    )
+    
     if (file_cache$file_changed())
       msg[["content"]] = file_cache$get_content()
 

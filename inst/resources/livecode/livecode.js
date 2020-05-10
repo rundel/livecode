@@ -70,6 +70,14 @@ ws.onmessage = function(msg) {
       new Noty(m).show();
     }
   }
+  
+  if (obj.filename) {
+    document.querySelector("#file span").innerHTML = obj.filename;
+  }
+  
+  if (obj.url) {
+    document.querySelector("#url span").innerHTML = obj.url;
+  }
 
   if (obj.content) {
     var code = obj.content.replace(/</g,"&lt;");
