@@ -32,7 +32,7 @@ serve_file = function(file = NULL, ip = NULL, port = NULL, interval = 1,
     )
   )
   
-  server$send_msg(text = welcome_msg)
+  #server$send_msg(text = welcome_msg)
   
   invisible(server)
 }
