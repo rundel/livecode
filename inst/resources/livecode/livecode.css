@@ -110,6 +110,9 @@ main {
   z-index: 0;
 }
 
+div.line-highlight {
+  margin-top: 0;
+}
 
 
 pre.livecode {
