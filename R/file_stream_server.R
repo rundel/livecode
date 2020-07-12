@@ -126,7 +126,7 @@ file_stream_server = function(host, port, file, file_id, interval = 3, template 
     },
 
     staticPaths = list(
-      "/web" = livecode:::pkg_resource("resources")
+      "/web" = pkg_resource("resources")
     )
   )
 
