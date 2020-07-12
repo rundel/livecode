@@ -52,7 +52,7 @@ provide `livecode` with a bitly API access token. To obtain one of these
 tokens you will need to create an account with bitly (the free tier is
 sufficient) and then select <kbd>Profile Settings</kbd> \> <kbd>Generic
 Access Token</kbd> and then enter your password when prompted. This
-results in a long hexidecimal string that you should copy to your
+results in a long hexadecimal string that you should copy to your
 clipboard.
 
 `livecode` looks for this token in an environmental variable called
@@ -69,7 +69,7 @@ add a single line with the format
     BITLY_PAT=0123456789abcdef0123456789abcdef01234567
 
 replacing `0123456789abcdef0123456789abcdef01234567` with the
-hexidecimal string you copied from bitly. After saving `.Renviron` you
+hexadecimal string you copied from bitly. After saving `.Renviron` you
 will need to restart your R session and can then test that your token is
 function correctly by running,
 
