@@ -5,3 +5,4 @@
 .Rbuildignore
 *.webloc
 .httr-oauth
+docs
