@@ -4,7 +4,7 @@
 \name{livecode-package}
 \alias{livecode}
 \alias{livecode-package}
-\title{livecode: Broadcast a source file to multiple concurrent users}
+\title{livecode: Broadcast a Source File to Multiple Concurrent Users}
 \description{
 \if{html}{\figure{logo.png}{options: align='right' alt='logo' width='120'}}
 
@@ -16,6 +16,13 @@ Server for broadcasting source code to multiple viewers
 Broadcast a local R (or other text) document over the web and provide live updates as it is edited.
 }
 \seealso{
+Useful links:
+\itemize{
+  \item \url{https://github.com/rundel/livecode}
+  \item Report bugs at \url{https://github.com/rundel/livecode/issues}
+}
+
+
 \link{serve_file}
 }
 \author{

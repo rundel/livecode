@@ -1,5 +1,5 @@
 Package: livecode
-Title: Broadcast a source file to multiple concurrent users
+Title: Broadcast a Source File to Multiple Concurrent Users
 Version: 0.1.0.9000
 Authors@R: 
     person(given = "Colin",
@@ -29,3 +29,5 @@ Imports:
 RoxygenNote: 7.1.1
 LinkingTo: 
     Rcpp
+URL: https://github.com/rundel/livecode
+BugReports: https://github.com/rundel/livecode/issues
