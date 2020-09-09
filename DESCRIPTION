@@ -25,7 +25,8 @@ Imports:
     later,
     tibble,
     crayon,
-    rstudioapi
+    rstudioapi,
+    stringi
 RoxygenNote: 7.1.0
 LinkingTo: 
     Rcpp

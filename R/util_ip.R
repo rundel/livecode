@@ -57,6 +57,8 @@ ip_type = function(ip) {
 }
 
 iface_type = function(iface) {
+  
+  iface = stringi::stri_enc_toutf8(iface)
   iface = tolower(iface)
   type = rep("other", length(iface))
 
