@@ -37,13 +37,19 @@ lc_server <- R6::R6Class(
 )
 
 
-file_stream_server = function(host, port, file, file_id, interval = 3, template = "prism") {
+file_stream_server = function(host, port, file, file_id, interval = 3, template = "prism", upgrade_content_security_policy) {
   port = as.integer(port)
   file_cache = file_cache(file)
+  if (upgrade_content_security_policy == TRUE){
+    content_security_policy = '<meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">'
+  } else {
+    content_security_policy = ""
+  }
   page = glue::glue(
     readr::read_file(get_template(template)),
     lang = "r",
-    title = file
+    title = file,
+    meta = content_security_policy
   )
 
   get_next_ws_id = local({
@@ -157,6 +163,7 @@ lc_server_iface = R6::R6Class(
     interval = NULL,
     bitly_url = NULL,
     server = NULL,
+    upgrade_content_security_policy = NULL,
 
     init_file = function(file, auto_save) {
 
@@ -271,9 +278,11 @@ lc_server_iface = R6::R6Class(
     #' @param bitly should a bitly bit link be created for the server.
     #' @param auto_save should the broadcast file be auto saved update tic.
     #' @param open_browser should a browser session be opened.
+    #' @param upgrade_content_security_policy should insecure requests be upgraded.
     initialize = function(
       file, ip, port, interval = 2,
-      bitly = FALSE, auto_save = TRUE, open_browser = TRUE
+      bitly = FALSE, auto_save = TRUE, open_browser = TRUE,
+      upgrade_content_security_policy = FALSE
     ) {
       private$init_file(file, auto_save)
       private$init_ip(ip)
@@ -281,6 +290,8 @@ lc_server_iface = R6::R6Class(
 
       private$template = "prism"
       private$interval = interval
+      private$upgrade_content_security_policy = 
+        upgrade_content_security_policy
       self$start()
 
       if (bitly)
@@ -368,7 +379,9 @@ lc_server_iface = R6::R6Class(
     start = function() {
       private$server = file_stream_server(
         private$ip, private$port, private$file, private$file_id,
-        template = private$template, interval = private$interval
+        template = private$template, interval = private$interval,
+        upgrade_content_security_policy = 
+          private$upgrade_content_security_policy
       )
 
       usethis::ui_done( paste(
@@ -442,16 +455,20 @@ lc_server_iface = R6::R6Class(
 #' @param bitly should a bitly bit link be created for the server.
 #' @param auto_save should the broadcast file be auto saved during each update tic.
 #' @param open_browser should a browser session be opened.
+#' @param upgrade_content_security_policy should insecure requests be upgraded.
 #'
 #' @export
 
 serve_file = function(file, ip, port, interval = 1,
                       bitly = FALSE, auto_save = TRUE,
-                      open_browser = TRUE) {
+                      open_browser = TRUE, 
+                      upgrade_content_security_policy = FALSE) {
   server = lc_server_iface$new(file = file, ip = ip,
                                port = port, interval = interval,
                                bitly = bitly, auto_save = auto_save,
-                               open_browser = open_browser)
+                               open_browser = open_browser,
+                               upgrade_content_security_policy = 
+                                 upgrade_content_security_policy)
 
   welcome_msg = c(
     "## Welcome to `livecode`!",

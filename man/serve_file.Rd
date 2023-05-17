@@ -11,7 +11,8 @@ serve_file(
   interval = 1,
   bitly = FALSE,
   auto_save = TRUE,
-  open_browser = TRUE
+  open_browser = TRUE,
+  upgrade_content_security_policy = FALSE
 )
 }
 \arguments{
@@ -28,6 +29,8 @@ serve_file(
 \item{auto_save}{should the broadcast file be auto saved during each update tic.}
 
 \item{open_browser}{should a browser session be opened.}
+
+\item{upgrade_content_security_policy}{should insecure requests be upgraded.}
 }
 \description{
 Create a livecode server for broadcasting a file

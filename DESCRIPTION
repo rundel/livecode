@@ -27,6 +27,6 @@ Imports:
     crayon,
     rstudioapi,
     stringi
-RoxygenNote: 7.1.0
+RoxygenNote: 7.2.3
 LinkingTo: 
     Rcpp
