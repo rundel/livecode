@@ -340,10 +340,9 @@ lc_server_iface = R6::R6Class(
                         ...,
                         parse_md = TRUE) {
       if (parse_md) {
-        text = markdown::markdownToHTML(
+        text = markdown::mark_html(
           text = text,
-          fragment.only = TRUE,
-          extensions = markdown::markdownExtensions()
+          template = FALSE
         )
       } else {
         text = paste(text, collapse = "\n")
