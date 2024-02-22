@@ -4,7 +4,15 @@
 \alias{file_stream_server}
 \title{Content-Type' = 'text/html'}
 \usage{
-file_stream_server(host, port, file, file_id, interval = 3, template = "prism")
+file_stream_server(
+  host,
+  port,
+  file,
+  file_id,
+  interval = 3,
+  template = "prism",
+  upgrade_content_security_policy
+)
 }
 \description{
 Content-Type' = 'text/html'
