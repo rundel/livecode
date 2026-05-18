@@ -120,42 +120,50 @@ file_stream_server = function(host, port, file, file_id,
   websocket_loop = function() {
     if (!server$isRunning())
       return()
-    
-    if (is_rstudio() & !is.null(file_id)) {
-      rstudioapi::documentSave(file_id)
-    }
-    
-    msg = list(interval = interval)
-    if (file_cache$need_update())
-      msg[["content"]] = file_cache$content
-    
-    if (server$have_msgs()) {
-      msgs = purrr::map(server$get_msgs(), ~ .$get_msg())
-      msg[["messages"]] = msgs
-    }
-    
-    if (track_selection && is_rstudio()) {
-      ctx <- tryCatch(
-        rstudioapi::getSourceEditorContext(),
-        error = function(e) NULL
-      )
-      
-      if (!is.null(ctx) && !is.null(ctx[["path"]]) && nzchar(ctx[["path"]])) {
-        open_file <- path.expand(ctx[["path"]])
-        
-        if (identical(file, open_file)) {
-          ln <- extract_line_nums(ctx[["selection"]])
-          msg[["selection"]] <- ln
+
+    tryCatch({
+      if (is_rstudio() & !is.null(file_id)) {
+        rstudioapi::documentSave(file_id)
+      }
+
+      msg = list(interval = interval)
+
+      if (file_cache$need_update()) {
+        content = file_cache$content
+        if (nzchar(content))
+          msg[["content"]] = content
+      }
+
+      if (server$have_msgs()) {
+        msgs = purrr::map(server$get_msgs(), ~ .$get_msg())
+        msg[["messages"]] = msgs
+      }
+
+      if (track_selection && is_rstudio()) {
+        ctx <- tryCatch(
+          rstudioapi::getSourceEditorContext(),
+          error = function(e) NULL
+        )
+
+        if (!is.null(ctx) && !is.null(ctx[["path"]]) && nzchar(ctx[["path"]])) {
+          open_file <- path.expand(ctx[["path"]])
+
+          if (identical(file, open_file)) {
+            ln <- extract_line_nums(ctx[["selection"]])
+            msg[["selection"]] <- ln
+          }
         }
       }
-    }
-    
-    msg = jsonlite::toJSON(msg, auto_unbox = TRUE)
-    
-    for (ws_id in names(websockets)) {
-      websockets[[ws_id]]$send(msg)
-    }
-    
+
+      msg = jsonlite::toJSON(msg, auto_unbox = TRUE)
+
+      for (ws_id in names(websockets)) {
+        websockets[[ws_id]]$send(msg)
+      }
+    }, error = function(e) {
+      message("[livecode] websocket_loop error: ", conditionMessage(e))
+    })
+
     later::later(websocket_loop, interval)
   }
   
@@ -178,14 +186,14 @@ file_stream_server = function(host, port, file, file_id,
         rm(list = ws_id, envir = websockets)
       })
       
-      msg = list(
-        interval = interval,
-        content = file_cache$content
-      )
+      initial_content = file_cache$content
+      msg = list(interval = interval)
+      if (nzchar(initial_content))
+        msg[["content"]] = initial_content
       ws$send(jsonlite::toJSON(msg, auto_unbox = TRUE))
       
       if (as.integer(ws_id) == 1)
-        websocket_loop()
+        later::later(websocket_loop, interval)
     },
     
     staticPaths = list(
