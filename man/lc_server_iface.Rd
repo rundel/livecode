@@ -2,7 +2,7 @@
 % Please edit documentation in R/file_stream_server.R
 \name{lc_server_iface}
 \alias{lc_server_iface}
-\title{livecode server interface}
+\title{Livecode Server Interface}
 \description{
 This is a high level, user facing interface class that allows
 for the creation of a livecode server sharing a specific file.
@@ -14,25 +14,31 @@ The interface also provides additional tools for sending messages.
 \item{\code{url}}{The current url of the server.}
 
 \item{\code{path}}{The path of the file being served.}
+
+\item{\code{public_url}}{The current public ngrok URL, if any.}
+
+\item{\code{tunnel_active}}{Whether an ngrok tunnel is currently active.}
 }
 \if{html}{\out{</div>}}
 }
 \section{Methods}{
 \subsection{Public methods}{
 \itemize{
-\item \href{#method-new}{\code{lc_server_iface$new()}}
-\item \href{#method-open}{\code{lc_server_iface$open()}}
-\item \href{#method-print}{\code{lc_server_iface$print()}}
-\item \href{#method-send_msg}{\code{lc_server_iface$send_msg()}}
-\item \href{#method-is_running}{\code{lc_server_iface$is_running()}}
-\item \href{#method-start}{\code{lc_server_iface$start()}}
-\item \href{#method-stop}{\code{lc_server_iface$stop()}}
-\item \href{#method-restart}{\code{lc_server_iface$restart()}}
+\item \href{#method-LiveCodeServer_Interface-new}{\code{lc_server_iface$new()}}
+\item \href{#method-LiveCodeServer_Interface-open}{\code{lc_server_iface$open()}}
+\item \href{#method-LiveCodeServer_Interface-print}{\code{lc_server_iface$print()}}
+\item \href{#method-LiveCodeServer_Interface-send_msg}{\code{lc_server_iface$send_msg()}}
+\item \href{#method-LiveCodeServer_Interface-is_running}{\code{lc_server_iface$is_running()}}
+\item \href{#method-LiveCodeServer_Interface-start}{\code{lc_server_iface$start()}}
+\item \href{#method-LiveCodeServer_Interface-stop}{\code{lc_server_iface$stop()}}
+\item \href{#method-LiveCodeServer_Interface-start_ngrok}{\code{lc_server_iface$start_ngrok()}}
+\item \href{#method-LiveCodeServer_Interface-stop_ngrok}{\code{lc_server_iface$stop_ngrok()}}
+\item \href{#method-LiveCodeServer_Interface-restart}{\code{lc_server_iface$restart()}}
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-new"></a>}}
-\if{latex}{\out{\hypertarget{method-new}{}}}
+\if{html}{\out{<a id="method-LiveCodeServer_Interface-new"></a>}}
+\if{latex}{\out{\hypertarget{method-LiveCodeServer_Interface-new}{}}}
 \subsection{Method \code{new()}}{
 Creates a new livecode server
 \subsection{Usage}{
@@ -68,8 +74,8 @@ Creates a new livecode server
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-open"></a>}}
-\if{latex}{\out{\hypertarget{method-open}{}}}
+\if{html}{\out{<a id="method-LiveCodeServer_Interface-open"></a>}}
+\if{latex}{\out{\hypertarget{method-LiveCodeServer_Interface-open}{}}}
 \subsection{Method \code{open()}}{
 Open server in browser
 \subsection{Usage}{
@@ -78,8 +84,8 @@ Open server in browser
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-print"></a>}}
-\if{latex}{\out{\hypertarget{method-print}{}}}
+\if{html}{\out{<a id="method-LiveCodeServer_Interface-print"></a>}}
+\if{latex}{\out{\hypertarget{method-LiveCodeServer_Interface-print}{}}}
 \subsection{Method \code{print()}}{
 Class print method
 \subsection{Usage}{
@@ -88,8 +94,8 @@ Class print method
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-send_msg"></a>}}
-\if{latex}{\out{\hypertarget{method-send_msg}{}}}
+\if{html}{\out{<a id="method-LiveCodeServer_Interface-send_msg"></a>}}
+\if{latex}{\out{\hypertarget{method-LiveCodeServer_Interface-send_msg}{}}}
 \subsection{Method \code{send_msg()}}{
 Send a noty message to all connected users on the next update tic.
 \subsection{Usage}{
@@ -122,8 +128,8 @@ Send a noty message to all connected users on the next update tic.
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-is_running"></a>}}
-\if{latex}{\out{\hypertarget{method-is_running}{}}}
+\if{html}{\out{<a id="method-LiveCodeServer_Interface-is_running"></a>}}
+\if{latex}{\out{\hypertarget{method-LiveCodeServer_Interface-is_running}{}}}
 \subsection{Method \code{is_running()}}{
 Determine if the server is running.
 \subsection{Usage}{
@@ -135,8 +141,8 @@ Returns `TRUE` if the server is running.
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-start"></a>}}
-\if{latex}{\out{\hypertarget{method-start}{}}}
+\if{html}{\out{<a id="method-LiveCodeServer_Interface-start"></a>}}
+\if{latex}{\out{\hypertarget{method-LiveCodeServer_Interface-start}{}}}
 \subsection{Method \code{start()}}{
 Start the server
 \subsection{Usage}{
@@ -145,8 +151,8 @@ Start the server
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-stop"></a>}}
-\if{latex}{\out{\hypertarget{method-stop}{}}}
+\if{html}{\out{<a id="method-LiveCodeServer_Interface-stop"></a>}}
+\if{latex}{\out{\hypertarget{method-LiveCodeServer_Interface-stop}{}}}
 \subsection{Method \code{stop()}}{
 Stop the server
 \subsection{Usage}{
@@ -162,8 +168,37 @@ Stop the server
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-restart"></a>}}
-\if{latex}{\out{\hypertarget{method-restart}{}}}
+\if{html}{\out{<a id="method-LiveCodeServer_Interface-start_ngrok"></a>}}
+\if{latex}{\out{\hypertarget{method-LiveCodeServer_Interface-start_ngrok}{}}}
+\subsection{Method \code{start_ngrok()}}{
+Start an ngrok tunnel for the server.
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{lc_server_iface$start_ngrok(domain = NULL, ngrok_bin = "ngrok")}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{domain}}{Optional reserved ngrok domain.}
+
+\item{\code{ngrok_bin}}{Path to ngrok binary.}
+}
+\if{html}{\out{</div>}}
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-LiveCodeServer_Interface-stop_ngrok"></a>}}
+\if{latex}{\out{\hypertarget{method-LiveCodeServer_Interface-stop_ngrok}{}}}
+\subsection{Method \code{stop_ngrok()}}{
+Stop the ngrok tunnel if one is active.
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{lc_server_iface$stop_ngrok()}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-LiveCodeServer_Interface-restart"></a>}}
+\if{latex}{\out{\hypertarget{method-LiveCodeServer_Interface-restart}{}}}
 \subsection{Method \code{restart()}}{
 Restart the server
 \subsection{Usage}{

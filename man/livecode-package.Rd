@@ -2,19 +2,16 @@
 % Please edit documentation in R/livecode.R
 \docType{package}
 \name{livecode-package}
-\alias{livecode-package}
 \alias{livecode}
-\title{Source code broadcasting server}
+\alias{livecode-package}
+\title{livecode: Broadcast a source file to multiple concurrant users}
 \description{
-Server for broadcasting source code to multiple viewers
-}
-\details{
+\if{html}{\figure{logo.png}{options: style='float: right' alt='logo' width='120'}}
+
 Broadcast a local R (or other text) document over the web and provide live updates as it is edited.
 }
-\seealso{
-\link{serve_file}
-}
 \author{
-Colin Rundel \email{rundel@gmail.com}
+\strong{Maintainer}: Colin Rundel \email{rundel@gmail.com}
+
 }
-\keyword{package}
+\keyword{internal}

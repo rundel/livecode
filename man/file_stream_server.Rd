@@ -2,10 +2,70 @@
 % Please edit documentation in R/file_stream_server.R
 \name{file_stream_server}
 \alias{file_stream_server}
-\title{Content-Type' = 'text/html'}
+\title{Create a low-level livecode file streaming server}
 \usage{
 file_stream_server(host, port, file, file_id, interval = 3, template = "prism")
 }
-\description{
-Content-Type' = 'text/html'
+\arguments{
+\item{host}{Character string giving the IP address or hostname on which the
+server should listen.}
+
+\item{port}{Integer port number for the server.}
+
+\item{file}{Path to the file being broadcast.}
+
+\item{file_id}{Optional editor-specific file identifier used by RStudio for
+auto-save operations.}
+
+\item{interval}{Numeric update interval in seconds between broadcast ticks.}
+
+\item{template}{Character string naming the HTML template to use. Defaults
+to \code{"prism"}.}
 }
+\value{
+A \code{LiveCodeServer} R6 object inheriting from
+\code{httpuv:::WebServer}.
+}
+\description{
+Creates and returns a low-level HTTP/WebSocket server used by
+\pkg{livecode} to broadcast the contents of a source file to connected
+browsers.
+
+The server hosts an HTML page, serves supporting static assets, and maintains
+WebSocket connections to all connected clients. File changes, editor cursor
+selections, and queued messages are pushed to clients at a fixed interval.
+
+This function is primarily an internal constructor used by
+\code{\link{serve_file}} and \code{LiveCodeServer_Interface}.
+}
+\details{
+The server performs the following tasks:
+
+\itemize{
+  \item Serves a rendered HTML page based on the selected template.
+  \item Tracks the source file using \code{\link{file_cache}}.
+  \item Pushes updated file contents to clients when the file changes.
+  \item Pushes queued messages from the server message queue.
+  \item In RStudio, optionally saves the file on each update tick.
+  \item In RStudio, broadcasts the current editor selection when the served
+    file is the active document.
+  \item Serves static assets (JavaScript, CSS, etc.) from the package
+    resources directory under \code{/web}.
+}
+
+Connected clients receive JSON messages over WebSocket containing one or more
+of:
+
+\itemize{
+  \item \code{content}: updated file contents
+  \item \code{messages}: queued notifications
+  \item \code{selection}: highlighted line selection
+  \item \code{interval}: refresh interval
+}
+}
+\seealso{
+\code{\link{serve_file}},
+\code{\link{file_cache}},
+\code{\link{lc_server_iface}}
+}
+\keyword{internal}

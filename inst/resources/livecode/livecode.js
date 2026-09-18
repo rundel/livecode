@@ -1,4 +1,28 @@
-var ws = new WebSocket("ws://"+window.location.host);
+var ws;
+var ws_reconnect_delay = 1000;
+var ws_reconnect_timer = null;
+
+function connect_ws() {
+  ws = new WebSocket(
+    (window.location.protocol === "https:" ? "wss://" : "ws://") +
+    window.location.host
+  );
+
+  ws.onclose = function() {
+    ws_reconnect_timer = setTimeout(function() {
+      ws_reconnect_delay = Math.min(ws_reconnect_delay * 2, 30000);
+      connect_ws();
+    }, ws_reconnect_delay);
+  };
+
+  ws.onopen = function() {
+    ws_reconnect_delay = 1000;
+  };
+
+  ws.onmessage = handle_ws_message;
+}
+
+connect_ws();
 
 draw_pb = function(interval) {
   var pb = document.getElementById('progressbar');
@@ -47,7 +71,7 @@ draw_timer = function(duration, color) {
 
 
 
-ws.onmessage = function(msg) {
+function handle_ws_message(msg) {
   var obj = JSON.parse(msg.data);
   var need_update = false;
 

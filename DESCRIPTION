@@ -1,32 +1,33 @@
 Package: livecode
 Title: Broadcast a source file to multiple concurrant users
-Version: 0.1.0.9000
+Version: 0.1.0.9001
 Authors@R: 
     person(given = "Colin",
            family = "Rundel",
            role = c("aut", "cre"),
            email = "rundel@gmail.com")
 Description: Broadcast a local R (or other text) document over the web and provide live updates as it is edited.
-License: GPL-3
+License: GPL (>= 3)
 Encoding: UTF-8
 LazyData: true
 Imports: 
     usethis,
     readr,
     glue,
-    withr,
     jsonlite,
     httpuv,
     httr,
     purrr,
     Rcpp,
     iptools,
-    markdown,
     later,
     tibble,
     crayon,
     rstudioapi,
-    stringi
-RoxygenNote: 7.1.0
+    stringi,
+    markdown,
+    processx,
+    withr
+RoxygenNote: 7.3.3
 LinkingTo: 
     Rcpp
