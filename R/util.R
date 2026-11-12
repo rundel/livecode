@@ -18,18 +18,6 @@ pkg_resource = function(..., must_work = FALSE) {
   system.file(..., package = "livecode", mustWork = must_work)
 }
 
-get_template = function(name) {
-  if (file.exists(name))
-    return(name)
-
-  file = pkg_resource("templates", paste0(name, ".html"))
-
-  if (file == "")
-    cli::cli_abort("Template {.val {name}} does not exist.")
-
-  file
-}
-
 html_escape = function(x) {
   x = gsub("&", "&amp;", x, fixed = TRUE)
   x = gsub("<", "&lt;", x, fixed = TRUE)

@@ -54,6 +54,15 @@ including:
   \item Messages sent via \code{send_msg()}
 }
 
+The page highlights the file with a bundled copy of Prism, chosen by the
+file's extension: R, Quarto and R Markdown (\code{.qmd}, \code{.Rmd}),
+Python, SQL, shell, Markdown, YAML, JSON, TOML, JavaScript, TypeScript,
+CSS, HTML and XML, C, C++, Java, Julia, Rust, Go, LaTeX, Dockerfiles and
+Makefiles. Other files are shown as plain text. Line numbers match the
+source file, and the lines selected in the editor are highlighted and
+scrolled into view. The page reconnects by itself if the connection to
+the server drops.
+
 A welcome message is shown to every user when they connect.
 }
 \examples{

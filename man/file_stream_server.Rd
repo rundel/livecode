@@ -4,14 +4,7 @@
 \alias{file_stream_server}
 \title{Create a low-level livecode file streaming server}
 \usage{
-file_stream_server(
-  host,
-  port,
-  file,
-  file_id = NULL,
-  interval = 1,
-  template = "prism"
-)
+file_stream_server(host, port, file, file_id = NULL, interval = 1)
 }
 \arguments{
 \item{host}{Character string giving the IP address on which the
@@ -25,9 +18,6 @@ server should listen.}
 auto-save operations.}
 
 \item{interval}{Numeric update interval in seconds between broadcast ticks.}
-
-\item{template}{Character string naming the HTML template to use. Defaults
-to \code{"prism"}.}
 }
 \value{
 A \code{LiveCodeServer} R6 object.
@@ -48,7 +38,8 @@ This function is primarily an internal constructor used by
 The server performs the following tasks:
 
 \itemize{
-  \item Serves a rendered HTML page based on the selected template.
+  \item Serves an HTML page that highlights the file with Prism in the
+    language given by its extension (see \code{file_code_language()}).
   \item Tracks the source file using \code{\link{file_cache}}.
   \item Pushes updated file contents to clients when the file changes.
   \item Pushes queued messages from the server message queue.
@@ -69,8 +60,10 @@ of:
 \itemize{
   \item \code{content}: updated file contents
   \item \code{messages}: queued notifications
-  \item \code{selection}: highlighted line selection
+  \item \code{selection}: highlighted line selection, such as
+    \code{"3-5,9"}, or \code{""} to clear it
   \item \code{interval}: refresh interval
+  \item \code{lang}: the Prism language of the file (connect frame only)
 }
 
 A newly connected client receives the current broadcast state (content,

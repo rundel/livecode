@@ -2,9 +2,11 @@ lc_server = R6::R6Class(
   "LiveCodeServer",
   cloneable = FALSE,
   public = list(
-    initialize = function(host, port, page, file, file_id = NULL, interval = 1) {
+    initialize = function(host, port, page, file, file_id = NULL, interval = 1,
+                          lang = file_code_language(file)) {
       private$page = page
       private$file = file
+      private$lang = lang
       private$file_id = file_id
       private$interval = interval
       private$cache = file_cache(file)
@@ -66,6 +68,7 @@ lc_server = R6::R6Class(
     connect_frame = function() {
       frame = list(
         interval = private$interval,
+        lang = private$lang,
         content = private$state[["content"]]
       )
 
@@ -143,6 +146,7 @@ lc_server = R6::R6Class(
     page = NULL,
     file = NULL,
     file_id = NULL,
+    lang = NULL,
     interval = NULL,
     cache = NULL,
     state = NULL,
@@ -264,14 +268,13 @@ editor_selection = function(file) {
 #' @param file_id Optional editor-specific file identifier used by RStudio for
 #'   auto-save operations.
 #' @param interval Numeric update interval in seconds between broadcast ticks.
-#' @param template Character string naming the HTML template to use. Defaults
-#'   to \code{"prism"}.
 #'
 #' @details
 #' The server performs the following tasks:
 #'
 #' \itemize{
-#'   \item Serves a rendered HTML page based on the selected template.
+#'   \item Serves an HTML page that highlights the file with Prism in the
+#'     language given by its extension (see \code{file_code_language()}).
 #'   \item Tracks the source file using \code{\link{file_cache}}.
 #'   \item Pushes updated file contents to clients when the file changes.
 #'   \item Pushes queued messages from the server message queue.
@@ -292,8 +295,10 @@ editor_selection = function(file) {
 #' \itemize{
 #'   \item \code{content}: updated file contents
 #'   \item \code{messages}: queued notifications
-#'   \item \code{selection}: highlighted line selection
+#'   \item \code{selection}: highlighted line selection, such as
+#'     \code{"3-5,9"}, or \code{""} to clear it
 #'   \item \code{interval}: refresh interval
+#'   \item \code{lang}: the Prism language of the file (connect frame only)
 #' }
 #'
 #' A newly connected client receives the current broadcast state (content,
@@ -308,15 +313,12 @@ editor_selection = function(file) {
 #' \code{\link{lc_server_iface}}
 #'
 #' @keywords internal
-file_stream_server = function(host, port, file, file_id = NULL, interval = 1, template = "prism") {
+file_stream_server = function(host, port, file, file_id = NULL, interval = 1) {
   port = as.integer(port)
-  page = glue::glue(
-    readr::read_file(get_template(template)),
-    lang = "r",
-    title = html_escape(basename(file))
-  )
+  lang = file_code_language(file)
+  page = livecode_page(file, lang)
 
-  lc_server$new(host, port, page, file, file_id, interval)
+  lc_server$new(host, port, page, file, file_id, interval, lang)
 }
 
 #' Livecode Server Interface
@@ -335,7 +337,6 @@ lc_server_iface = R6::R6Class(
     file_id = NULL,
     ip = NULL,
     port = NULL,
-    template = NULL,
     interval = NULL,
     server = NULL,
     sticky_msg = NULL,
@@ -459,7 +460,6 @@ lc_server_iface = R6::R6Class(
       private$init_port(port)
       private$init_interval(interval)
 
-      private$template = "prism"
       self$start()
 
       if (auto_save)
@@ -564,7 +564,7 @@ lc_server_iface = R6::R6Class(
       private$server = tryCatch(
         file_stream_server(
           private$ip, private$port, private$file, private$file_id,
-          template = private$template, interval = private$interval
+          interval = private$interval
         ),
         error = function(e) {
           cli::cli_abort(
@@ -674,6 +674,15 @@ lc_server_iface = R6::R6Class(
 #'   \item Cursor/selection position (RStudio only)
 #'   \item Messages sent via \code{send_msg()}
 #' }
+#'
+#' The page highlights the file with a bundled copy of Prism, chosen by the
+#' file's extension: R, Quarto and R Markdown (\code{.qmd}, \code{.Rmd}),
+#' Python, SQL, shell, Markdown, YAML, JSON, TOML, JavaScript, TypeScript,
+#' CSS, HTML and XML, C, C++, Java, Julia, Rust, Go, LaTeX, Dockerfiles and
+#' Makefiles. Other files are shown as plain text. Line numbers match the
+#' source file, and the lines selected in the editor are highlighted and
+#' scrolled into view. The page reconnects by itself if the connection to
+#' the server drops.
 #'
 #' A welcome message is shown to every user when they connect.
 #'

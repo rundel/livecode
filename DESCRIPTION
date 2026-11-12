@@ -28,6 +28,7 @@ Imports:
 Suggests:
     curl,
     testthat (>= 3.0.0),
+    V8,
     websocket,
     withr
 Config/testthat/edition: 3

@@ -1,0 +1,121 @@
+/*
+ * livecode's code view (see livecode-code-view.js), adapted from markermd.
+ * Token colors follow Visual Studio's light "vs" palette.
+ */
+.livecode-view {
+  --lc-code-font: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  --lc-code-size: 16px;
+  --lc-code-lh: 1.5;
+  --lc-gutter: 3ch;
+  --lc-bg: #ffffff;
+  --lc-fg: #1f2328;
+  --lc-gutter-fg: #8c959f;
+  --lc-gutter-rule: #d8dee4;
+  --lc-hl-bg: rgba(255, 235, 59, 0.22);
+  --lc-hl-edge: rgba(255, 193, 7, 0.9);
+  --lc-comment: #008000;
+  --lc-keyword: #0000ff;
+  --lc-string: #a31515;
+  --lc-number: #098658;
+  --lc-function: #795e26;
+  --lc-title: #0451a5;
+  --lc-attr: #e50000;
+  --lc-punct: #393a34;
+  --lc-tag: #800000;
+  --lc-selector: #800000;
+  position: relative;
+  overflow: auto;
+  background: var(--lc-bg);
+}
+
+.livecode-view > pre {
+  margin: 0;
+  padding: 4px 0;
+  background: transparent;
+  border: 0;
+  color: var(--lc-fg);
+  font-family: var(--lc-code-font);
+  font-size: var(--lc-code-size);
+  line-height: var(--lc-code-lh);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  tab-size: 4;
+}
+
+.livecode-view > pre > code {
+  display: block;
+  font: inherit;
+  color: inherit;
+  background: none;
+  padding: 0;
+  white-space: inherit;
+  word-break: normal;
+}
+
+.livecode-view .lc-line {
+  display: block;
+  position: relative;
+  min-height: calc(var(--lc-code-size) * var(--lc-code-lh));
+  padding-left: calc(var(--lc-gutter) + 1.6ch);
+  padding-right: 8px;
+  background-image: linear-gradient(var(--lc-gutter-rule), var(--lc-gutter-rule));
+  background-size: 1px 100%;
+  background-position: calc(var(--lc-gutter) + 0.6ch) 0;
+  background-repeat: no-repeat;
+}
+
+.livecode-view .lc-line::before {
+  content: attr(data-n);
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--lc-gutter);
+  text-align: right;
+  color: var(--lc-gutter-fg);
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* The instructor's selection: a whole-line band with an amber edge */
+.livecode-view .lc-line.lc-hl {
+  background-color: var(--lc-hl-bg);
+  box-shadow: inset 3px 0 0 var(--lc-hl-edge);
+}
+
+.livecode-view .token.comment,
+.livecode-view .token.prolog,
+.livecode-view .token.doctype,
+.livecode-view .token.cdata { color: var(--lc-comment); }
+.livecode-view .token.keyword,
+.livecode-view .token.boolean,
+.livecode-view .token.important,
+.livecode-view .token.constant { color: var(--lc-keyword); }
+.livecode-view .token.string,
+.livecode-view .token.char,
+.livecode-view .token.url,
+.livecode-view .token.regex,
+.livecode-view .token.code-snippet,
+.livecode-view .token.code-block { color: var(--lc-string); }
+.livecode-view .token.number { color: var(--lc-number); }
+.livecode-view .token.function,
+.livecode-view .token.builtin { color: var(--lc-function); }
+.livecode-view .token.title { color: var(--lc-title); font-weight: 600; }
+.livecode-view .token.attr-name,
+.livecode-view .token.key,
+.livecode-view .token.atrule,
+.livecode-view .token.property,
+.livecode-view .token.variable { color: var(--lc-attr); }
+.livecode-view .token.punctuation,
+.livecode-view .token.operator,
+.livecode-view .token.entity { color: var(--lc-punct); }
+.livecode-view .token.tag { color: var(--lc-tag); }
+.livecode-view .token.selector,
+.livecode-view .token.class-name { color: var(--lc-selector); }
+.livecode-view .token.bold { font-weight: 600; }
+.livecode-view .token.italic { font-style: italic; }
+.livecode-view .token.chunk-header .token.keyword,
+.livecode-view .token.inline-engine { color: var(--lc-keyword); font-weight: 600; }
+/* Code inside a chunk or inline R uses its own language's colors, not
+   markdown's code color */
+.livecode-view .token.chunk-code,
+.livecode-view .token.inline-code { color: var(--lc-fg); }
