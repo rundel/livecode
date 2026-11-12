@@ -1,14 +1,3 @@
-is_rstudio = function() {
-  requireNamespace("rstudioapi", quietly = TRUE) && rstudioapi::isAvailable()
-}
-
-using_project = function() {
-  if (is_rstudio())
-    !is.null(rstudioapi::getActiveProject())
-  else
-    FALSE
-}
-
 # The RStudio viewer sandboxes websockets, so always use the system browser.
 get_browser = function() {
   getOption("browser")

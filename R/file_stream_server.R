@@ -3,12 +3,15 @@ lc_server = R6::R6Class(
   cloneable = FALSE,
   public = list(
     initialize = function(host, port, page, file, file_id = NULL, interval = 1,
-                          lang = file_code_language(file)) {
+                          lang = file_code_language(file), auto_save = FALSE,
+                          editor = editor_backend()) {
       private$page = page
       private$file = file
       private$lang = lang
       private$file_id = file_id
       private$interval = interval
+      private$auto_save = isTRUE(auto_save)
+      private$editor = editor
       private$cache = file_cache(file)
       private$state = list(content = private$cache$content, selection = NULL)
       private$websockets = new.env(parent = emptyenv())
@@ -85,7 +88,7 @@ lc_server = R6::R6Class(
     # cache is compared with what was last broadcast rather than with its
     # own previous read, so a refresh triggered elsewhere cannot hide a
     # change from clients.
-    build_frame = function() {
+    build_frame = function(ctx = editor_context(private$editor)) {
       frame = list(interval = private$interval)
 
       content = private$cache$content
@@ -94,7 +97,7 @@ lc_server = R6::R6Class(
         private$state[["content"]] = content
       }
 
-      selection = editor_selection(private$file)
+      selection = editor_selection(private$file, ctx, private$editor)
       if (!is.null(selection) && !identical(selection, private$state[["selection"]])) {
         frame[["selection"]] = selection
         private$state[["selection"]] = selection
@@ -131,9 +134,15 @@ lc_server = R6::R6Class(
         add = TRUE
       )
 
-      private$guard("Auto-save", function() editor_save(private$file_id))
+      ctx = editor_context(private$editor)
+
+      if (private$auto_save) {
+        private$guard("Auto-save", function() {
+          editor_save(private$file, private$file_id, ctx, private$editor)
+        })
+      }
       private$guard("Broadcast update", function() {
-        frame = self$build_frame()
+        frame = self$build_frame(ctx)
         self$broadcast(frame)
       })
 
@@ -148,6 +157,8 @@ lc_server = R6::R6Class(
     file_id = NULL,
     lang = NULL,
     interval = NULL,
+    auto_save = FALSE,
+    editor = "none",
     cache = NULL,
     state = NULL,
     websockets = NULL,
@@ -223,30 +234,6 @@ frame_to_json = function(frame) {
   jsonlite::toJSON(frame, auto_unbox = TRUE)
 }
 
-editor_save = function(file_id) {
-  if (is_rstudio() && !is.null(file_id))
-    rstudioapi::documentSave(file_id)
-  invisible()
-}
-
-# NULL means the selection is unknown (no IDE), "" that the served file is
-# not the active document, so clients clear the highlight.
-editor_selection = function(file) {
-  if (!is_rstudio())
-    return(NULL)
-
-  ctx = rstudioapi::getSourceEditorContext()
-  path = ctx[["path"]]
-  if (is.null(ctx) || length(path) != 1 || is.na(path) || !nzchar(path))
-    return("")
-
-  if (!identical(path.expand(path), file))
-    return("")
-
-  extract_line_nums(ctx[["selection"]])
-}
-
-
 #' Create a low-level livecode file streaming server
 #'
 #' @description
@@ -265,9 +252,14 @@ editor_selection = function(file) {
 #'   server should listen.
 #' @param port Integer port number for the server.
 #' @param file Path to the file being broadcast.
-#' @param file_id Optional editor-specific file identifier used by RStudio for
-#'   auto-save operations.
+#' @param file_id Optional RStudio document id of the file, used to save it
+#'   and to notice when it is renamed. Positron has no document ids.
 #' @param interval Numeric update interval in seconds between broadcast ticks.
+#' @param auto_save Logical. Should the file be saved in the editor on each
+#'   tick.
+#' @param editor The editor backend, one of \code{"rstudio"},
+#'   \code{"positron"}, or \code{"none"}. Detected by default, see
+#'   \code{\link{serve_file}}.
 #'
 #' @details
 #' The server performs the following tasks:
@@ -278,16 +270,21 @@ editor_selection = function(file) {
 #'   \item Tracks the source file using \code{\link{file_cache}}.
 #'   \item Pushes updated file contents to clients when the file changes.
 #'   \item Pushes queued messages from the server message queue.
-#'   \item In RStudio, optionally saves the file on each update tick.
-#'   \item In RStudio, broadcasts the current editor selection when the served
-#'     file is the active document, and an empty selection when it is not.
+#'   \item In RStudio or Positron, optionally saves the file on each update
+#'     tick. Positron can only save the active editor, so there the file is
+#'     saved only while it is the active document.
+#'   \item In RStudio or Positron, broadcasts the current editor selection
+#'     when the served file is the active document, and an empty selection
+#'     when it is not.
+#'   \item In RStudio, notices when the document is renamed or saved under
+#'     another name, tells the instructor once, and stops auto-saving it.
 #'   \item Serves static assets (JavaScript, CSS, etc.) from the package
 #'     resources directory under \code{/web}.
 #' }
 #'
 #' The update loop starts with the server and keeps running until the server
-#' is stopped. Errors in a tick (for example a briefly missing file) are
-#' reported once and do not stop the loop.
+#' is stopped. Errors in a tick (for example a briefly missing file or a
+#' failing editor call) are reported once and do not stop the loop.
 #'
 #' Connected clients receive JSON messages over WebSocket containing one or more
 #' of:
@@ -313,12 +310,16 @@ editor_selection = function(file) {
 #' \code{\link{lc_server_iface}}
 #'
 #' @keywords internal
-file_stream_server = function(host, port, file, file_id = NULL, interval = 1) {
+file_stream_server = function(host, port, file, file_id = NULL, interval = 1,
+                              auto_save = FALSE, editor = editor_backend()) {
   port = as.integer(port)
   lang = file_code_language(file)
   page = livecode_page(file, lang)
 
-  lc_server$new(host, port, page, file, file_id, interval, lang)
+  lc_server$new(
+    host, port, page, file, file_id, interval, lang,
+    auto_save = auto_save, editor = editor
+  )
 }
 
 #' Livecode Server Interface
@@ -335,6 +336,8 @@ lc_server_iface = R6::R6Class(
   private = list(
     file = NULL,
     file_id = NULL,
+    auto_save = FALSE,
+    editor = "none",
     ip = NULL,
     port = NULL,
     interval = NULL,
@@ -342,39 +345,50 @@ lc_server_iface = R6::R6Class(
     sticky_msg = NULL,
 
     init_file = function(file, auto_save) {
-      if (!is.null(file))
+      editor = editor_backend()
+      ctx = NULL
+
+      if (!is.null(file)) {
+        if (!is.character(file) || length(file) != 1 || is.na(file) || !nzchar(file))
+          cli::cli_abort("{.arg file} must be a single file path.")
+
         file = path.expand(file)
+        if (!file.exists(file))
+          cli::cli_abort("Unable to locate file {.file {file}}.")
 
-      file_id = NULL
-      if (is_rstudio()) {
-        if (is.character(file)) {
-          rstudioapi::navigateToFile(file)
-          Sys.sleep(0.5)
+        if (!identical(editor, "none"))
+          ctx = editor_open(file, editor)
+      } else {
+        if (identical(editor, "none")) {
+          cli::cli_abort(c(
+            "No file specified.",
+            "i" = "Outside RStudio and Positron, pass the path of the file to share as {.arg file}."
+          ))
         }
 
-        ctx = rstudioapi::getSourceEditorContext()
-        path = ctx[["path"]]
-        if (!is.null(ctx) && length(path) == 1 && !is.na(path) && nzchar(path)) {
-          file = path.expand(path)
-          file_id = ctx[["id"]]
+        ctx = editor_context(editor)
+        if (is.null(ctx)) {
+          cli::cli_abort(c(
+            "No file specified and no document is open in the editor.",
+            "i" = "Open the file to share, or pass its path as {.arg file}."
+          ))
         }
+        if (is.null(ctx[["path"]])) {
+          cli::cli_abort(c(
+            "The active document has not been saved.",
+            "i" = "Save it to a file first, or pass the path of the file to share as {.arg file}."
+          ))
+        }
+
+        file = path.expand(ctx[["path"]])
+        if (!file.exists(file))
+          cli::cli_abort("Unable to locate file {.file {file}}.")
       }
-
-      if (!auto_save)
-        file_id = NULL
-
-      if (is.null(file) || length(file) != 1 || is.na(file) || !nzchar(file)) {
-        cli::cli_abort(c(
-          "No file specified.",
-          "i" = "If you are using RStudio make sure the current open file has been saved at least once."
-        ))
-      }
-
-      if (!file.exists(file))
-        cli::cli_abort("Unable to locate file {.file {file}}.")
 
       private$file = file
-      private$file_id = file_id
+      private$file_id = ctx[["id"]]
+      private$auto_save = isTRUE(auto_save)
+      private$editor = editor
     },
 
     init_ip = function(ip) {
@@ -425,20 +439,7 @@ lc_server_iface = R6::R6Class(
     },
 
     init_auto_save = function() {
-      if (!check_strip_trailing_ws())
-        return()
-
-      opt_name = "Strip trailing horizontal whitespace when saving"
-      if (using_project())
-        menu = "Tools > Project Options > Code Editing"
-      else
-        menu = "Tools > Global Options > Code > Saving"
-
-      cli::cli_alert_warning(paste(
-        "You are running livecode with {.code auto_save = TRUE} and the {.val {opt_name}}",
-        "option checked in RStudio. This can result in undesirable behavior while you broadcast.",
-        "To resolve this, from RStudio's menu select {.field {menu}} and uncheck {.val {opt_name}}."
-      ))
+      editor_save_warnings(private$editor)
     }
   ),
   public = list(
@@ -564,7 +565,8 @@ lc_server_iface = R6::R6Class(
       private$server = tryCatch(
         file_stream_server(
           private$ip, private$port, private$file, private$file_id,
-          interval = private$interval
+          interval = private$interval, auto_save = private$auto_save,
+          editor = private$editor
         ),
         error = function(e) {
           cli::cli_abort(

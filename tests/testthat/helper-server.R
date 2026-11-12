@@ -69,3 +69,37 @@ local_server = function(file, interval = 0.1, env = parent.frame()) {
   withr::defer(if (srv$is_running()) suppressMessages(srv$stop()), envir = env)
   srv
 }
+
+# Tests never talk to a real IDE, even when run from inside one.
+options(livecode.editor = "none")
+
+local_editor = function(backend, env = parent.frame()) {
+  withr::local_options(livecode.editor = backend, .local_envir = env)
+  editor_reset()
+  withr::defer(editor_reset(), envir = env)
+}
+
+# A fake source editor: the context it reports and a log of the calls made.
+fake_editor = function(path = NULL, id = NULL, contents = NULL, selection = list(), env = parent.frame()) {
+  ed = new.env()
+  ed$ctx = list(id = id, path = path, contents = contents, selection = selection)
+  ed$calls = list()
+  log = function(...) ed$calls[[length(ed$calls) + 1]] = list(...)
+
+  testthat::local_mocked_bindings(
+    rs_context = function() ed$ctx,
+    rs_save = function(id = NULL) log("save", id),
+    rs_navigate = function(file) log("navigate", file),
+    ps_execute_command = function(command) log("command", command),
+    .env = env
+  )
+  ed
+}
+
+calls_of = function(ed, kind) {
+  Filter(function(x) identical(x[[1]], kind), ed$calls)
+}
+
+sel_rows = function(first, last) {
+  list(list(range = list(start = c(row = first, column = 1), end = c(row = last, column = 2)), text = ""))
+}

@@ -4,7 +4,15 @@
 \alias{file_stream_server}
 \title{Create a low-level livecode file streaming server}
 \usage{
-file_stream_server(host, port, file, file_id = NULL, interval = 1)
+file_stream_server(
+  host,
+  port,
+  file,
+  file_id = NULL,
+  interval = 1,
+  auto_save = FALSE,
+  editor = editor_backend()
+)
 }
 \arguments{
 \item{host}{Character string giving the IP address on which the
@@ -14,10 +22,17 @@ server should listen.}
 
 \item{file}{Path to the file being broadcast.}
 
-\item{file_id}{Optional editor-specific file identifier used by RStudio for
-auto-save operations.}
+\item{file_id}{Optional RStudio document id of the file, used to save it
+and to notice when it is renamed. Positron has no document ids.}
 
 \item{interval}{Numeric update interval in seconds between broadcast ticks.}
+
+\item{auto_save}{Logical. Should the file be saved in the editor on each
+tick.}
+
+\item{editor}{The editor backend, one of \code{"rstudio"},
+\code{"positron"}, or \code{"none"}. Detected by default, see
+\code{\link{serve_file}}.}
 }
 \value{
 A \code{LiveCodeServer} R6 object.
@@ -43,16 +58,21 @@ The server performs the following tasks:
   \item Tracks the source file using \code{\link{file_cache}}.
   \item Pushes updated file contents to clients when the file changes.
   \item Pushes queued messages from the server message queue.
-  \item In RStudio, optionally saves the file on each update tick.
-  \item In RStudio, broadcasts the current editor selection when the served
-    file is the active document, and an empty selection when it is not.
+  \item In RStudio or Positron, optionally saves the file on each update
+    tick. Positron can only save the active editor, so there the file is
+    saved only while it is the active document.
+  \item In RStudio or Positron, broadcasts the current editor selection
+    when the served file is the active document, and an empty selection
+    when it is not.
+  \item In RStudio, notices when the document is renamed or saved under
+    another name, tells the instructor once, and stops auto-saving it.
   \item Serves static assets (JavaScript, CSS, etc.) from the package
     resources directory under \code{/web}.
 }
 
 The update loop starts with the server and keeps running until the server
-is stopped. Errors in a tick (for example a briefly missing file) are
-reported once and do not stop the loop.
+is stopped. Errors in a tick (for example a briefly missing file or a
+failing editor call) are reported once and do not stop the loop.
 
 Connected clients receive JSON messages over WebSocket containing one or more
 of:

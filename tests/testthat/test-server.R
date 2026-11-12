@@ -96,7 +96,7 @@ test_that("the tick survives a deleted file and keeps running", {
 })
 
 test_that("tick errors are reported once and the loop keeps going", {
-  local_mocked_bindings(editor_selection = function(file) stop("boom"))
+  local_mocked_bindings(editor_selection = function(...) stop("boom"))
   f = local_test_file("x = 1")
   srv = local_server(f)
 
@@ -104,7 +104,7 @@ test_that("tick errors are reported once and the loop keeps going", {
   expect_equal(sum(grepl("boom", msgs)), 1)
   expect_true(srv$is_running())
 
-  local_mocked_bindings(editor_selection = function(file) NULL)
+  local_mocked_bindings(editor_selection = function(...) NULL)
   touch_write(f, "x = 4")
   client = ws_client(srv$url)
   expect_equal(client$frames[[1]]$content %in% c("x = 1\n", "x = 4\n"), TRUE)
