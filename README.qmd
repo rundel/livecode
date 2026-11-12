@@ -1,5 +1,9 @@
 ---
-output: github_document
+format:
+  gfm:
+    wrap: preserve
+    columns: 1000
+from: markdown-smart
 ---
 # livecode <img src='man/figures/logo.png' align="right" height="140" />
 
