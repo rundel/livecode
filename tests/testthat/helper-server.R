@@ -1,0 +1,71 @@
+pump = function(seconds = 0.5, until = function() FALSE) {
+  deadline = Sys.time() + seconds
+  while (Sys.time() < deadline) {
+    later::run_now(0.02)
+    if (requireNamespace("curl", quietly = TRUE))
+      curl::multi_run(timeout = 0.01, poll = TRUE)
+    if (until())
+      return(TRUE)
+  }
+  until()
+}
+
+# The server runs in this process, so a blocking request would deadlock;
+# fetch asynchronously and keep the event loop running.
+http_get = function(url, seconds = 5) {
+  res = NULL
+  curl::curl_fetch_multi(
+    url,
+    done = function(r) res <<- r,
+    fail = function(msg) res <<- list(status_code = NA, error = msg)
+  )
+  pump(seconds, until = function() !is.null(res))
+  res
+}
+
+close_client = function(client) {
+  if (client$ws$readyState() %in% c(0L, 1L))
+    try(client$ws$close(), silent = TRUE)
+  pump(1, until = function() client$ws$readyState() == 3L)
+}
+
+ws_client = function(url, env = parent.frame()) {
+  client = new.env()
+  client$frames = list()
+  client$open = FALSE
+  client$ws = websocket::WebSocket$new(sub("^http", "ws", url), autoConnect = FALSE, errorLogChannels = "none")
+  client$ws$onOpen(function(e) client$open = TRUE)
+  client$ws$onMessage(function(e) {
+    client$frames[[length(client$frames) + 1]] = jsonlite::fromJSON(e$data, simplifyVector = FALSE)
+  })
+  client$ws$connect()
+  withr::defer(close_client(client), envir = env)
+  pump(5, until = function() client$open && length(client$frames) > 0)
+  client
+}
+
+contents = function(client) {
+  unlist(lapply(client$frames, function(f) f[["content"]]))
+}
+
+local_test_file = function(text = "x = 1", env = parent.frame()) {
+  path = withr::local_tempfile(fileext = ".R", .local_envir = env)
+  writeLines(text, path)
+  normalizePath(path)
+}
+
+# Bumps the mtime so the change is visible even on file systems with
+# coarse timestamps.
+touch_write = function(path, text) {
+  old = file.mtime(path)
+  writeLines(text, path)
+  Sys.setFileTime(path, old + 10)
+}
+
+local_server = function(file, interval = 0.1, env = parent.frame()) {
+  srv = suppressMessages(serve_file(
+    file, ip = "127.0.0.1", interval = interval, open_browser = FALSE, auto_save = FALSE
+  ))
+  withr::defer(if (srv$is_running()) suppressMessages(srv$stop()), envir = env)
+  srv
+}

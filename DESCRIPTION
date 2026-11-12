@@ -26,6 +26,7 @@ Imports:
     tibble,
     utils
 Suggests:
+    curl,
     testthat (>= 3.0.0),
     websocket,
     withr

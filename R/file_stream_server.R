@@ -129,7 +129,10 @@ lc_server = R6::R6Class(
       )
 
       private$guard("Auto-save", function() editor_save(private$file_id))
-      private$guard("Broadcast update", function() self$broadcast(self$build_frame()))
+      private$guard("Broadcast update", function() {
+        frame = self$build_frame()
+        self$broadcast(frame)
+      })
 
       invisible(TRUE)
     }
