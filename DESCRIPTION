@@ -26,11 +26,18 @@ Imports:
     tibble,
     utils
 Suggests:
+    callr,
     curl,
+    pkgload,
+    promises,
+    ps,
+    rtailcat,
     testthat (>= 3.0.0),
     V8,
     websocket,
     withr
+Remotes:
+    rundel/rtailcat
 Config/testthat/edition: 3
 LinkingTo:
     Rcpp

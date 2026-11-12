@@ -10,14 +10,15 @@ stop_all()
 Invisibly returns \code{NULL}. Called for side effects.
 }
 \description{
-Stops all currently registered \code{livecode} server instances.
+Stops all currently registered \code{livecode} server instances, their
+tailcat broadcasts, and every \code{\link{follow}()} of a broadcast.
 
 This is a convenience function for shutting down every active server created
 during the current R session.
 }
 \details{
-The function iterates over all server objects stored in the internal
-server registry and calls \code{$stop()} on each one.
+The function iterates over all server and follower objects stored in the
+internal registries and calls \code{$stop()} on each one.
 
 This is useful when multiple livecode sessions have been started and you want
 to cleanly terminate all of them at once.

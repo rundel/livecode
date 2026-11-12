@@ -10,7 +10,8 @@ serve_file(
   port = NULL,
   interval = 1,
   auto_save = TRUE,
-  open_browser = TRUE
+  open_browser = TRUE,
+  tailcat = FALSE
 )
 }
 \arguments{
@@ -31,6 +32,11 @@ and pushing updates to clients.}
 each update interval (RStudio and Positron, see Details).}
 
 \item{open_browser}{Logical. Should a browser session be opened automatically.}
+
+\item{tailcat}{Also broadcast over tailcat, so students anywhere can follow
+with [follow()]: `FALSE` (the default), `TRUE` for a fresh address, or
+keys from [tailcat_keys()] for an address posted ahead of time. Needs
+the rtailcat package, see the section on tailcat below.}
 }
 \value{
 An invisible \code{LiveCodeServer_Interface} R6 object representing the running
@@ -39,6 +45,8 @@ server. This object provides methods such as:
   \item \code{$stop()} to stop the server
   \item \code{$restart()} to restart the server
   \item \code{$send_msg()} to send messages to connected clients
+  \item \code{$start_tailcat()}, \code{$stop_tailcat()}, and
+    \code{$tailcat_address} for the tailcat broadcast
 }
 }
 \description{
@@ -94,6 +102,44 @@ scrolled into view. The page reconnects by itself if the connection to
 the server drops.
 
 A welcome message is shown to every user when they connect.
+}
+
+\section{Broadcasting over tailcat}{
+
+The page is served on the local network only. With \code{tailcat = TRUE}
+(or \code{$start_tailcat()} on a running server) the file is also
+broadcast over \href{https://github.com/tailscale/tailcat}{tailcat}, an
+end to end encrypted transport that reaches students anywhere, directly
+or through tailcat's public relays. \code{serve_file()} prints the
+address, and each student runs \code{livecode::follow("tc...")} with it
+to see the same page, served by their own R session.
+
+The broadcast runs in a separate R process, so a problem in it cannot
+take down the instructor's session, and it keeps sending while the
+session is busy. It only ever sends; nothing a follower sends is read.
+Followers that fall behind are dropped and reconnect. At most
+\code{max_clients} (150 by default, see \code{$start_tailcat()})
+followers are connected at once.
+
+Practical points:
+\itemize{
+  \item The address is a credential: anyone who has it can follow the
+    session. Post it where only you can edit, such as the course site or
+    an LMS announcement, not a shared document or a chat, where someone
+    could replace it with the address of their own broadcast.
+  \item By default each broadcast has a fresh address that stops working
+    when it stops. To post an address before class, create keys with
+    \code{\link[=tailcat_keys]{tailcat_keys()}} and pass them as
+    \code{tailcat}. Use fresh keys for each class meeting, since everyone
+    who ever had an address can use it for as long as its keys are used.
+  \item Students need the rtailcat package, which is not on CRAN and
+    needs a Go toolchain to build (\code{pak::pak("rundel/rtailcat")}).
+  \item Followers see messages as plain text (see the \code{plain_text}
+    argument of \code{$send_msg()}).
+  \item Do a dry run in the room before relying on it. If the network
+    keeps devices apart, traffic goes through the public relays, which
+    are rate limited and have no uptime guarantee.
+}
 }
 
 \examples{

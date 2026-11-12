@@ -14,6 +14,10 @@ The interface also provides additional tools for sending messages.
     \item{\code{url}}{The current url of the server.}
 
     \item{\code{path}}{The path of the file being served.}
+
+    \item{\code{tailcat_address}}{The tailcat address of the broadcast, or
+`NULL` when there is none. It is a credential, see
+`$start_tailcat()`.}
   }
   \if{html}{\out{</div>}}
 }
@@ -28,6 +32,8 @@ The interface also provides additional tools for sending messages.
     \item \href{#method-LiveCodeServer_Interface-start}{\code{LiveCodeServer_Interface$start()}}
     \item \href{#method-LiveCodeServer_Interface-stop}{\code{LiveCodeServer_Interface$stop()}}
     \item \href{#method-LiveCodeServer_Interface-restart}{\code{LiveCodeServer_Interface$restart()}}
+    \item \href{#method-LiveCodeServer_Interface-start_tailcat}{\code{LiveCodeServer_Interface$start_tailcat()}}
+    \item \href{#method-LiveCodeServer_Interface-stop_tailcat}{\code{LiveCodeServer_Interface$stop_tailcat()}}
   }
 }
 \if{html}{\out{<hr>}}
@@ -43,7 +49,8 @@ The interface also provides additional tools for sending messages.
   port = NULL,
   interval = 1,
   auto_save = TRUE,
-  open_browser = TRUE
+  open_browser = TRUE,
+  tailcat = FALSE
 )}
     \if{html}{\out{</div>}}
   }
@@ -58,6 +65,9 @@ in RStudio or Positron.}
       \item{\code{auto_save}}{should the broadcast file be auto saved each update
 tick (RStudio and Positron, see \code{\link{serve_file}}).}
       \item{\code{open_browser}}{should a browser session be opened.}
+      \item{\code{tailcat}}{also broadcast over tailcat: `FALSE` (the default),
+`TRUE` for a fresh address, or keys from [tailcat_keys()] for an
+address posted ahead of time (see `$start_tailcat()`).}
     }
     \if{html}{\out{</div>}}
   }
@@ -188,10 +198,54 @@ written, before any markdown processing.}
 \if{html}{\out{<a id="method-LiveCodeServer_Interface-restart"></a>}}
 \if{latex}{\out{\hypertarget{method-LiveCodeServer_Interface-restart}{}}}
 \subsection{\code{LiveCodeServer_Interface$restart()}}{
-  Restart the server
+  Restart the server. A tailcat broadcast keeps running, with the same
+address.
   \subsection{Usage}{
     \if{html}{\out{<div class="r">}}
     \preformatted{LiveCodeServer_Interface$restart()}
+    \if{html}{\out{</div>}}
+  }
+}
+
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-LiveCodeServer_Interface-start_tailcat"></a>}}
+\if{latex}{\out{\hypertarget{method-LiveCodeServer_Interface-start_tailcat}{}}}
+\subsection{\code{LiveCodeServer_Interface$start_tailcat()}}{
+  Also broadcast the file over tailcat, so students anywhere can follow
+it with [follow()]. The broadcast runs in a separate R process and
+needs the rtailcat package; see the section on tailcat in
+[serve_file()].
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{LiveCodeServer_Interface$start_tailcat(
+  key = NULL,
+  port = 4000,
+  max_clients = 150
+)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{key}}{`NULL` for a fresh address, or keys from [tailcat_keys()]
+(or [rtailcat::tailcat_keygen()]) for an address posted ahead of
+time. Use a set of keys for one class meeting only.}
+      \item{\code{port}}{tailcat port to listen on.}
+      \item{\code{max_clients}}{most followers connected at once, further
+connections are closed straight away.}
+    }
+    \if{html}{\out{</div>}}
+  }
+}
+
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-LiveCodeServer_Interface-stop_tailcat"></a>}}
+\if{latex}{\out{\hypertarget{method-LiveCodeServer_Interface-stop_tailcat}{}}}
+\subsection{\code{LiveCodeServer_Interface$stop_tailcat()}}{
+  Stop the tailcat broadcast. The server itself keeps running.
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{LiveCodeServer_Interface$stop_tailcat()}
     \if{html}{\out{</div>}}
   }
 }

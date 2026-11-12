@@ -411,6 +411,17 @@ lc_server_iface = R6::R6Class(
     interval = NULL,
     server = NULL,
     sticky_msg = NULL,
+    tailcat = NULL,
+
+    attach_tailcat = function() {
+      broadcast = private$tailcat
+      private$server$add_sink("Tailcat broadcast", function(frame) broadcast$send(frame))
+    },
+
+    stop_server = function() {
+      if (!is.null(private$server))
+        private$server$stop()
+    },
 
     init_file = function(file, auto_save) {
       editor = editor_backend()
@@ -522,16 +533,35 @@ lc_server_iface = R6::R6Class(
     #' @param auto_save should the broadcast file be auto saved each update
     #'   tick (RStudio and Positron, see \code{\link{serve_file}}).
     #' @param open_browser should a browser session be opened.
+    #' @param tailcat also broadcast over tailcat: `FALSE` (the default),
+    #'   `TRUE` for a fresh address, or keys from [tailcat_keys()] for an
+    #'   address posted ahead of time (see `$start_tailcat()`).
     initialize = function(
       file = NULL, ip = NULL, port = NULL, interval = 1,
-      auto_save = TRUE, open_browser = TRUE
+      auto_save = TRUE, open_browser = TRUE, tailcat = FALSE
     ) {
+      if (!isFALSE(tailcat)) {
+        tc_check_installed(tc_broadcast_packages(), "A tailcat broadcast", call = NULL)
+        if (!isTRUE(tailcat))
+          tc_key_list(tailcat, call = NULL)
+      }
+
       private$init_file(file, auto_save)
       private$init_ip(ip)
       private$init_port(port)
       private$init_interval(interval)
 
       self$start()
+
+      if (!isFALSE(tailcat)) {
+        tryCatch(
+          self$start_tailcat(key = if (isTRUE(tailcat)) NULL else tailcat),
+          error = function(e) {
+            self$stop()
+            stop(e)
+          }
+        )
+      }
 
       if (auto_save)
         private$init_auto_save()
@@ -557,6 +587,11 @@ lc_server_iface = R6::R6Class(
       url = self$url
       status = if (self$is_running()) "running" else "stopped"
       cli::cli_text("{.strong livecode server:} {.file {name}} @ {.url {url}} ({status})")
+      if (!is.null(private$tailcat)) {
+        n = private$tailcat$n_clients()
+        state = if (private$tailcat$is_running()) "running, {n} follower{?s}" else "stopped"
+        cli::cli_text(paste0("{.strong tailcat broadcast:} ", state))
+      }
       invisible(self)
     },
 
@@ -658,6 +693,9 @@ lc_server_iface = R6::R6Class(
       if (!is.null(private$sticky_msg))
         private$server$set_sticky_msg(private$sticky_msg, announce = FALSE)
 
+      if (!is.null(private$tailcat))
+        private$attach_tailcat()
+
       name = basename(private$file)
       cli::cli_alert_success("Started sharing {.file {name}} at {.url {self$url}}.")
 
@@ -680,6 +718,8 @@ lc_server_iface = R6::R6Class(
     #' @param warn Should the users be sent a warning that the server is shutting down.
     stop = function(warn = FALSE) {
       if (!self$is_running()) {
+        if (!is.null(private$tailcat))
+          self$stop_tailcat()
         deregister_server(self)
         cli::cli_alert_info("The server at {.url {self$url}} is not running.")
         return(invisible(self))
@@ -696,7 +736,9 @@ lc_server_iface = R6::R6Class(
         Sys.sleep(0.5)
       }
 
-      private$server$stop()
+      private$stop_server()
+      if (!is.null(private$tailcat))
+        self$stop_tailcat()
       deregister_server(self)
 
       cli::cli_alert_success("Stopped server at {.url {self$url}}.")
@@ -704,14 +746,95 @@ lc_server_iface = R6::R6Class(
     },
 
     #' @description
-    #' Restart the server
+    #' Restart the server. A tailcat broadcast keeps running, with the same
+    #' address.
     restart = function() {
       if (self$is_running()) {
-        self$stop()
+        private$stop_server()
+        deregister_server(self)
+        cli::cli_alert_success("Stopped server at {.url {self$url}}.")
       }
 
       self$start()
 
+      invisible(self)
+    },
+
+    #' @description
+    #' Also broadcast the file over tailcat, so students anywhere can follow
+    #' it with [follow()]. The broadcast runs in a separate R process and
+    #' needs the rtailcat package; see the section on tailcat in
+    #' [serve_file()].
+    #'
+    #' @param key `NULL` for a fresh address, or keys from [tailcat_keys()]
+    #'   (or [rtailcat::tailcat_keygen()]) for an address posted ahead of
+    #'   time. Use a set of keys for one class meeting only.
+    #' @param port tailcat port to listen on.
+    #' @param max_clients most followers connected at once, further
+    #'   connections are closed straight away.
+    start_tailcat = function(key = NULL, port = 4000, max_clients = 150) {
+      tc_check_installed(tc_broadcast_packages(), "A tailcat broadcast")
+
+      if (!self$is_running())
+        cli::cli_abort("The server is not running, start it with {.code $start()} first.")
+
+      if (!is.null(private$tailcat) && private$tailcat$is_running()) {
+        cli::cli_alert_info("The tailcat broadcast is already running, see {.field $tailcat_address}.")
+        return(invisible(self))
+      }
+
+      port = suppressWarnings(as.integer(port))
+      if (length(port) != 1 || is.na(port) || port < 1L || port > 65535L)
+        cli::cli_abort("{.arg port} must be a single port number between 1 and 65535.")
+
+      max_clients = suppressWarnings(as.integer(max_clients))
+      if (length(max_clients) != 1 || is.na(max_clients) || max_clients < 1L)
+        cli::cli_abort("{.arg max_clients} must be a single positive whole number.")
+
+      keys = if (is.null(key)) NULL else tc_key_list(key, call = environment())
+      expected = if (inherits(key, "livecode_tailcat_keys")) key[["address"]] else NULL
+
+      if (!is.null(private$tailcat))
+        self$stop_tailcat()
+
+      private$tailcat = tc_broadcast$new(
+        private$file, file_code_language(private$file), private$interval,
+        key = keys, port = port, max_clients = max_clients
+      )
+      private$attach_tailcat()
+
+      address = private$tailcat$address()
+      if (!is.null(expected) && !identical(address, expected)) {
+        cli::cli_alert_warning(paste(
+          "The broadcast's address differs from the one saved with these keys,",
+          "probably because tailcat's relay map changed. Post the new address below."
+        ))
+      }
+
+      cli::cli_alert_success("Tailcat broadcast ready. Students run:")
+      cli::cli_code(paste0("livecode::follow(\"", address, "\")"))
+      cli::cli_alert_info(paste(
+        "The address is a credential: post it where only you can edit,",
+        "such as the course site, not in a shared document or chat."
+      ))
+
+      invisible(self)
+    },
+
+    #' @description
+    #' Stop the tailcat broadcast. The server itself keeps running.
+    stop_tailcat = function() {
+      if (is.null(private$tailcat)) {
+        cli::cli_alert_info("No tailcat broadcast is running.")
+        return(invisible(self))
+      }
+
+      if (!is.null(private$server))
+        private$server$remove_sink("Tailcat broadcast")
+      private$tailcat$stop()
+      private$tailcat = NULL
+
+      cli::cli_alert_success("Stopped the tailcat broadcast.")
       invisible(self)
     }
   ),
@@ -724,6 +847,15 @@ lc_server_iface = R6::R6Class(
     #' @field path The path of the file being served.
     path = function() {
       private$file
+    },
+
+    #' @field tailcat_address The tailcat address of the broadcast, or
+    #'   `NULL` when there is none. It is a credential, see
+    #'   `$start_tailcat()`.
+    tailcat_address = function() {
+      if (is.null(private$tailcat))
+        return(NULL)
+      private$tailcat$address()
     }
   )
 )
@@ -747,6 +879,10 @@ lc_server_iface = R6::R6Class(
 #' @param auto_save Logical. Should the source file be automatically saved at
 #'   each update interval (RStudio and Positron, see Details).
 #' @param open_browser Logical. Should a browser session be opened automatically.
+#' @param tailcat Also broadcast over tailcat, so students anywhere can follow
+#'   with [follow()]: `FALSE` (the default), `TRUE` for a fresh address, or
+#'   keys from [tailcat_keys()] for an address posted ahead of time. Needs
+#'   the rtailcat package, see the section on tailcat below.
 #'
 #' @details
 #' The server is implemented using \pkg{httpuv} and maintains an open WebSocket
@@ -796,6 +932,42 @@ lc_server_iface = R6::R6Class(
 #'
 #' A welcome message is shown to every user when they connect.
 #'
+#' @section Broadcasting over tailcat:
+#' The page is served on the local network only. With \code{tailcat = TRUE}
+#' (or \code{$start_tailcat()} on a running server) the file is also
+#' broadcast over \href{https://github.com/tailscale/tailcat}{tailcat}, an
+#' end to end encrypted transport that reaches students anywhere, directly
+#' or through tailcat's public relays. \code{serve_file()} prints the
+#' address, and each student runs \code{livecode::follow("tc...")} with it
+#' to see the same page, served by their own R session.
+#'
+#' The broadcast runs in a separate R process, so a problem in it cannot
+#' take down the instructor's session, and it keeps sending while the
+#' session is busy. It only ever sends; nothing a follower sends is read.
+#' Followers that fall behind are dropped and reconnect. At most
+#' \code{max_clients} (150 by default, see \code{$start_tailcat()})
+#' followers are connected at once.
+#'
+#' Practical points:
+#' \itemize{
+#'   \item The address is a credential: anyone who has it can follow the
+#'     session. Post it where only you can edit, such as the course site or
+#'     an LMS announcement, not a shared document or a chat, where someone
+#'     could replace it with the address of their own broadcast.
+#'   \item By default each broadcast has a fresh address that stops working
+#'     when it stops. To post an address before class, create keys with
+#'     \code{\link[=tailcat_keys]{tailcat_keys()}} and pass them as
+#'     \code{tailcat}. Use fresh keys for each class meeting, since everyone
+#'     who ever had an address can use it for as long as its keys are used.
+#'   \item Students need the rtailcat package, which is not on CRAN and
+#'     needs a Go toolchain to build (\code{pak::pak("rundel/rtailcat")}).
+#'   \item Followers see messages as plain text (see the \code{plain_text}
+#'     argument of \code{$send_msg()}).
+#'   \item Do a dry run in the room before relying on it. If the network
+#'     keeps devices apart, traffic goes through the public relays, which
+#'     are rate limited and have no uptime guarantee.
+#' }
+#'
 #' @return
 #' An invisible \code{LiveCodeServer_Interface} R6 object representing the running
 #' server. This object provides methods such as:
@@ -803,6 +975,8 @@ lc_server_iface = R6::R6Class(
 #'   \item \code{$stop()} to stop the server
 #'   \item \code{$restart()} to restart the server
 #'   \item \code{$send_msg()} to send messages to connected clients
+#'   \item \code{$start_tailcat()}, \code{$stop_tailcat()}, and
+#'     \code{$tailcat_address} for the tailcat broadcast
 #' }
 #'
 #' @examples
@@ -820,11 +994,13 @@ serve_file = function(file = NULL,
                       port = NULL,
                       interval = 1,
                       auto_save = TRUE,
-                      open_browser = TRUE) {
+                      open_browser = TRUE,
+                      tailcat = FALSE) {
   server = lc_server_iface$new(
     file = file, ip = ip, port = port,
     interval = interval,
-    auto_save = auto_save, open_browser = open_browser
+    auto_save = auto_save, open_browser = open_browser,
+    tailcat = tailcat
   )
 
   welcome_msg = c(

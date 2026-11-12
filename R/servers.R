@@ -1,6 +1,7 @@
 .globals = new.env()
 
 .globals$servers = list()
+.globals$followers = list()
 
 is_registered = function(server) {
   any(vapply(.globals$servers, identical, logical(1), y = server))
@@ -25,14 +26,15 @@ deregister_server = function(server) {
 #' Stop all active livecode servers
 #'
 #' @description
-#' Stops all currently registered \code{livecode} server instances.
+#' Stops all currently registered \code{livecode} server instances, their
+#' tailcat broadcasts, and every \code{\link{follow}()} of a broadcast.
 #'
 #' This is a convenience function for shutting down every active server created
 #' during the current R session.
 #'
 #' @details
-#' The function iterates over all server objects stored in the internal
-#' server registry and calls \code{$stop()} on each one.
+#' The function iterates over all server and follower objects stored in the
+#' internal registries and calls \code{$stop()} on each one.
 #'
 #' This is useful when multiple livecode sessions have been started and you want
 #' to cleanly terminate all of them at once.
@@ -58,6 +60,9 @@ deregister_server = function(server) {
 stop_all = function() {
   for (server in .globals$servers) {
     server$stop()
+  }
+  for (follower in .globals$followers) {
+    follower$stop()
   }
   invisible()
 }
