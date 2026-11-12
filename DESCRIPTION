@@ -18,11 +18,9 @@ Imports:
     crayon,
     glue,
     httpuv,
-    httr,
     jsonlite,
     later,
     markdown,
-    processx,
     purrr,
     R6,
     Rcpp,
@@ -37,6 +35,6 @@ Suggests:
     websocket,
     withr
 Config/testthat/edition: 3
-RoxygenNote: 7.3.3
 LinkingTo:
     Rcpp
+Config/roxygen2/version: 8.1.1

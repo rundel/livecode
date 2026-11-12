@@ -4,14 +4,27 @@
 \name{livecode-package}
 \alias{livecode}
 \alias{livecode-package}
-\title{livecode: Broadcast a source file to multiple concurrant users}
+\title{livecode: Broadcast a Source File to Multiple Concurrent Users}
 \description{
 \if{html}{\figure{logo.png}{options: style='float: right' alt='logo' width='120'}}
 
 Broadcast a local R (or other text) document over the web and provide live updates as it is edited.
 }
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://github.com/rundel/livecode}
+  \item Report bugs at \url{https://github.com/rundel/livecode/issues}
+}
+
+}
 \author{
 \strong{Maintainer}: Colin Rundel \email{rundel@gmail.com}
+
+Authors:
+\itemize{
+  \item Colin Rundel \email{rundel@gmail.com}
+}
 
 }
 \keyword{internal}

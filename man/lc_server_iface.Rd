@@ -9,201 +9,169 @@ for the creation of a livecode server sharing a specific file.
 The interface also provides additional tools for sending messages.
 }
 \section{Active bindings}{
-\if{html}{\out{<div class="r6-active-bindings">}}
-\describe{
-\item{\code{url}}{The current url of the server.}
+  \if{html}{\out{<div class="r6-active-bindings">}}
+  \describe{
+    \item{\code{url}}{The current url of the server.}
 
-\item{\code{path}}{The path of the file being served.}
-
-\item{\code{public_url}}{The current public ngrok URL, if any.}
-
-\item{\code{tunnel_active}}{Whether an ngrok tunnel is currently active.}
-}
-\if{html}{\out{</div>}}
+    \item{\code{path}}{The path of the file being served.}
+  }
+  \if{html}{\out{</div>}}
 }
 \section{Methods}{
 \subsection{Public methods}{
-\itemize{
-\item \href{#method-LiveCodeServer_Interface-new}{\code{lc_server_iface$new()}}
-\item \href{#method-LiveCodeServer_Interface-open}{\code{lc_server_iface$open()}}
-\item \href{#method-LiveCodeServer_Interface-print}{\code{lc_server_iface$print()}}
-\item \href{#method-LiveCodeServer_Interface-send_msg}{\code{lc_server_iface$send_msg()}}
-\item \href{#method-LiveCodeServer_Interface-is_running}{\code{lc_server_iface$is_running()}}
-\item \href{#method-LiveCodeServer_Interface-start}{\code{lc_server_iface$start()}}
-\item \href{#method-LiveCodeServer_Interface-stop}{\code{lc_server_iface$stop()}}
-\item \href{#method-LiveCodeServer_Interface-start_ngrok}{\code{lc_server_iface$start_ngrok()}}
-\item \href{#method-LiveCodeServer_Interface-stop_ngrok}{\code{lc_server_iface$stop_ngrok()}}
-\item \href{#method-LiveCodeServer_Interface-restart}{\code{lc_server_iface$restart()}}
-}
+  \itemize{
+    \item \href{#method-LiveCodeServer_Interface-initialize}{\code{LiveCodeServer_Interface$new()}}
+    \item \href{#method-LiveCodeServer_Interface-open}{\code{LiveCodeServer_Interface$open()}}
+    \item \href{#method-LiveCodeServer_Interface-print}{\code{LiveCodeServer_Interface$print()}}
+    \item \href{#method-LiveCodeServer_Interface-send_msg}{\code{LiveCodeServer_Interface$send_msg()}}
+    \item \href{#method-LiveCodeServer_Interface-is_running}{\code{LiveCodeServer_Interface$is_running()}}
+    \item \href{#method-LiveCodeServer_Interface-start}{\code{LiveCodeServer_Interface$start()}}
+    \item \href{#method-LiveCodeServer_Interface-stop}{\code{LiveCodeServer_Interface$stop()}}
+    \item \href{#method-LiveCodeServer_Interface-restart}{\code{LiveCodeServer_Interface$restart()}}
+  }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-LiveCodeServer_Interface-new"></a>}}
-\if{latex}{\out{\hypertarget{method-LiveCodeServer_Interface-new}{}}}
-\subsection{Method \code{new()}}{
-Creates a new livecode server
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{lc_server_iface$new(
+\if{html}{\out{<a id="method-LiveCodeServer_Interface-initialize"></a>}}
+\if{latex}{\out{\hypertarget{method-LiveCodeServer_Interface-initialize}{}}}
+\subsection{\code{LiveCodeServer_Interface$new()}}{
+  Creates a new livecode server
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{LiveCodeServer_Interface$new(
   file,
   ip,
   port,
   interval = 2,
-  bitly = FALSE,
   auto_save = TRUE,
   open_browser = TRUE
-)}\if{html}{\out{</div>}}
+)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{file}}{Path to file to broadcast.}
+      \item{\code{ip}}{ip of the server, defaults to the top result of `network_interfaces`.}
+      \item{\code{port}}{port of the server, defaults to a random value.}
+      \item{\code{interval}}{page update interval in seconds.}
+      \item{\code{auto_save}}{should the broadcast file be auto saved update tic.}
+      \item{\code{open_browser}}{should a browser session be opened.}
+    }
+    \if{html}{\out{</div>}}
+  }
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{file}}{Path to file to broadcast.}
-
-\item{\code{ip}}{ip of the server, defaults to the top result of `network_interfaces`.}
-
-\item{\code{port}}{port of the server, defaults to a random value.}
-
-\item{\code{interval}}{page update interval in seconds.}
-
-\item{\code{bitly}}{should a bitly bit link be created for the server.}
-
-\item{\code{auto_save}}{should the broadcast file be auto saved update tic.}
-
-\item{\code{open_browser}}{should a browser session be opened.}
-}
-\if{html}{\out{</div>}}
-}
-}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-LiveCodeServer_Interface-open"></a>}}
 \if{latex}{\out{\hypertarget{method-LiveCodeServer_Interface-open}{}}}
-\subsection{Method \code{open()}}{
-Open server in browser
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{lc_server_iface$open()}\if{html}{\out{</div>}}
+\subsection{\code{LiveCodeServer_Interface$open()}}{
+  Open server in browser
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{LiveCodeServer_Interface$open()}
+    \if{html}{\out{</div>}}
+  }
 }
 
-}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-LiveCodeServer_Interface-print"></a>}}
 \if{latex}{\out{\hypertarget{method-LiveCodeServer_Interface-print}{}}}
-\subsection{Method \code{print()}}{
-Class print method
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{lc_server_iface$print()}\if{html}{\out{</div>}}
+\subsection{\code{LiveCodeServer_Interface$print()}}{
+  Class print method
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{LiveCodeServer_Interface$print()}
+    \if{html}{\out{</div>}}
+  }
 }
 
-}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-LiveCodeServer_Interface-send_msg"></a>}}
 \if{latex}{\out{\hypertarget{method-LiveCodeServer_Interface-send_msg}{}}}
-\subsection{Method \code{send_msg()}}{
-Send a noty message to all connected users on the next update tic.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{lc_server_iface$send_msg(
+\subsection{\code{LiveCodeServer_Interface$send_msg()}}{
+  Send a noty message to all connected users on the next update tic.
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{LiveCodeServer_Interface$send_msg(
   text,
   type = "info",
   theme = "bootstrap-v4",
   layout = "topRight",
   ...,
   parse_md = TRUE
-)}\if{html}{\out{</div>}}
+)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{text}}{text of the message.}
+      \item{\code{type}}{message type (`alert`, `success`, `warning`, `error`, `info`).}
+      \item{\code{theme}}{message theme (See [here](https://ned.im/noty/#/themes) for options)}
+      \item{\code{layout}}{message location.}
+      \item{\code{...}}{additional noty arguments.}
+      \item{\code{parse_md}}{should message text be processed as markdown before sending.}
+    }
+    \if{html}{\out{</div>}}
+  }
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{text}}{text of the message.}
-
-\item{\code{type}}{message type (`alert`, `success`, `warning`, `error`, `info`).}
-
-\item{\code{theme}}{message theme (See [here](https://ned.im/noty/#/themes) for options)}
-
-\item{\code{layout}}{message location.}
-
-\item{\code{...}}{additional noty arguments.}
-
-\item{\code{parse_md}}{should message text be processed as markdown before sending.}
-}
-\if{html}{\out{</div>}}
-}
-}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-LiveCodeServer_Interface-is_running"></a>}}
 \if{latex}{\out{\hypertarget{method-LiveCodeServer_Interface-is_running}{}}}
-\subsection{Method \code{is_running()}}{
-Determine if the server is running.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{lc_server_iface$is_running()}\if{html}{\out{</div>}}
+\subsection{\code{LiveCodeServer_Interface$is_running()}}{
+  Determine if the server is running.
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{LiveCodeServer_Interface$is_running()}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Returns}{
+    Returns `TRUE` if the server is running.
+  }
 }
 
-\subsection{Returns}{
-Returns `TRUE` if the server is running.
-}
-}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-LiveCodeServer_Interface-start"></a>}}
 \if{latex}{\out{\hypertarget{method-LiveCodeServer_Interface-start}{}}}
-\subsection{Method \code{start()}}{
-Start the server
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{lc_server_iface$start()}\if{html}{\out{</div>}}
+\subsection{\code{LiveCodeServer_Interface$start()}}{
+  Start the server
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{LiveCodeServer_Interface$start()}
+    \if{html}{\out{</div>}}
+  }
 }
 
-}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-LiveCodeServer_Interface-stop"></a>}}
 \if{latex}{\out{\hypertarget{method-LiveCodeServer_Interface-stop}{}}}
-\subsection{Method \code{stop()}}{
-Stop the server
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{lc_server_iface$stop(warn = FALSE)}\if{html}{\out{</div>}}
+\subsection{\code{LiveCodeServer_Interface$stop()}}{
+  Stop the server
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{LiveCodeServer_Interface$stop(warn = FALSE)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{warn}}{Should the users be sent a warning that the server is shutting down.}
+    }
+    \if{html}{\out{</div>}}
+  }
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{warn}}{Should the users be sent a warning that the server is shutting down.}
-}
-\if{html}{\out{</div>}}
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-LiveCodeServer_Interface-start_ngrok"></a>}}
-\if{latex}{\out{\hypertarget{method-LiveCodeServer_Interface-start_ngrok}{}}}
-\subsection{Method \code{start_ngrok()}}{
-Start an ngrok tunnel for the server.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{lc_server_iface$start_ngrok(domain = NULL, ngrok_bin = "ngrok")}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{domain}}{Optional reserved ngrok domain.}
-
-\item{\code{ngrok_bin}}{Path to ngrok binary.}
-}
-\if{html}{\out{</div>}}
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-LiveCodeServer_Interface-stop_ngrok"></a>}}
-\if{latex}{\out{\hypertarget{method-LiveCodeServer_Interface-stop_ngrok}{}}}
-\subsection{Method \code{stop_ngrok()}}{
-Stop the ngrok tunnel if one is active.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{lc_server_iface$stop_ngrok()}\if{html}{\out{</div>}}
-}
-
-}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-LiveCodeServer_Interface-restart"></a>}}
 \if{latex}{\out{\hypertarget{method-LiveCodeServer_Interface-restart}{}}}
-\subsection{Method \code{restart()}}{
-Restart the server
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{lc_server_iface$restart()}\if{html}{\out{</div>}}
+\subsection{\code{LiveCodeServer_Interface$restart()}}{
+  Restart the server
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{LiveCodeServer_Interface$restart()}
+    \if{html}{\out{</div>}}
+  }
 }
 
-}
 }

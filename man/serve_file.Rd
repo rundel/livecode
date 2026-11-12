@@ -9,12 +9,8 @@ serve_file(
   ip,
   port,
   interval = 1,
-  bitly = FALSE,
   auto_save = TRUE,
   open_browser = TRUE,
-  tunnel = FALSE,
-  ngrok_domain = NULL,
-  ngrok_bin = "ngrok",
   ...
 )
 }
@@ -30,25 +26,10 @@ network interface (see \code{network_interfaces()}).}
 \item{interval}{Numeric. Update interval in seconds for refreshing content
 and pushing updates to clients.}
 
-\item{bitly}{Logical. Should a Bitly short link be generated for the local
-server URL.}
-
 \item{auto_save}{Logical. Should the source file be automatically saved at
 each update interval (RStudio only).}
 
-\item{open_browser}{Logical. Should a browser session be opened automatically.
-If \code{tunnel = TRUE} and a public URL is available, the browser will open
-the public URL; otherwise, it opens the local URL.}
-
-\item{tunnel}{Logical. Should an \code{ngrok} tunnel be started to expose the
-local server. Requires \code{ngrok} to be installed and available on the
-system path.}
-
-\item{ngrok_domain}{Optional character string specifying a custom ngrok domain.
-Requires an ngrok account with reserved domains.}
-
-\item{ngrok_bin}{Character string giving the path to the \code{ngrok} binary.
-Defaults to \code{"ngrok"} (assumes it is available on the system path).}
+\item{open_browser}{Logical. Should a browser session be opened automatically.}
 
 \item{...}{Additional arguments (currently ignored).}
 }
@@ -56,19 +37,15 @@ Defaults to \code{"ngrok"} (assumes it is available on the system path).}
 An invisible \code{LiveCodeServer_Interface} R6 object representing the running
 server. This object provides methods such as:
 \itemize{
-  \item \code{$stop()} to stop the server (and any active tunnel)
+  \item \code{$stop()} to stop the server
   \item \code{$restart()} to restart the server
   \item \code{$send_msg()} to send messages to connected clients
-  \item \code{$start_ngrok()} and \code{$stop_ngrok()} to manage the tunnel
 }
 }
 \description{
 Starts a local \code{livecode} server that streams a syntax-highlighted
 version of a source file and automatically updates it in connected browsers.
 The server uses a WebSocket connection to push updates at a fixed interval.
-
-Optionally, an \href{https://ngrok.com}{ngrok} tunnel can be launched to expose
-the local server to the public internet via a secure HTTPS URL.
 }
 \details{
 The server is implemented using \pkg{httpuv} and maintains an open WebSocket
@@ -79,26 +56,10 @@ including:
   \item Cursor/selection position (RStudio only)
   \item Messages sent via \code{send_msg()}
 }
-
-When \code{tunnel = TRUE}, an ngrok process is launched in the background using
-\pkg{processx}. The process is attached to the returned server object and can
-be stopped using \code{$stop_ngrok()} or \code{$stop()}.
-
-Note that when accessing the server via HTTPS (e.g., through ngrok), WebSocket
-connections must use the \code{wss://} protocol. This is handled automatically
-in the client JavaScript.
 }
 \examples{
 \dontrun{
 srv <- serve_file("script.R")
-
-srv <- serve_file("script.R", tunnel = TRUE)
-
-srv <- serve_file(
-  "script.R",
-  tunnel = TRUE,
-  ngrok_domain = "mydomain.ngrok.io"
-)
 
 srv$send_msg("Hello, everyone!", type = "success")
 

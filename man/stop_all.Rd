@@ -13,8 +13,7 @@ Invisibly returns \code{NULL}. Called for side effects.
 Stops all currently registered \code{livecode} server instances.
 
 This is a convenience function for shutting down every active server created
-during the current R session, including any associated background tunnels
-(for example, ngrok tunnels started through \code{serve_file()}).
+during the current R session.
 }
 \details{
 The function iterates over all server objects stored in the internal

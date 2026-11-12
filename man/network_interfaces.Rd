@@ -6,8 +6,13 @@
 \usage{
 network_interfaces()
 }
+\value{
+A tibble with columns `interface`, `iface_type`, `ip`, and `ip_type`.
+}
 \description{
 This function attempts to order the interfaces using a relative priority
 based on the ip type, interface type, and then interface name. The goal is
-to favor the interface that is most "accessible".
+to favor the interface that is most "accessible". Known virtual adapters
+(Docker, VPNs, virtual machine bridges, and similar) are ranked below
+physical ones.
 }
