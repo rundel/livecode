@@ -10,7 +10,7 @@ noty_msg = R6::R6Class(
       theme = c("mint", "sunset", "relax",
                 "nest", "metroui", "semanticui",
                 "light", "bootstrap-v3", "bootstrap-v4"),
-      timeout = 0,
+      timeout = 10000,
       progressBar = FALSE,
       ...
     ) {

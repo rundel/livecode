@@ -496,9 +496,13 @@ lc_server_iface = R6::R6Class(
     #'
     #' @param text text of the message.
     #' @param type message type (`alert`, `success`, `warning`, `error`, `info`).
-    #' @param theme message theme (See [here](https://ned.im/noty/#/themes) for options)
+    #' @param theme message theme, one of `mint`, `sunset`, `relax`, `nest`,
+    #'   `metroui`, `semanticui`, `light`, `bootstrap-v3`, `bootstrap-v4`
+    #'   (See [here](https://ned.im/noty/#/themes) for examples).
     #' @param layout message location.
-    #' @param ... additional noty arguments.
+    #' @param ... additional noty arguments, for example `timeout`, the time
+    #'   in milliseconds before the message closes (10000 by default, `FALSE`
+    #'   keeps it open until it is clicked).
     #' @param parse_md should message text be processed as markdown before sending.
     #' @param sticky should the message also be shown to every user who
     #'   connects later. Only one sticky message is kept, a new one replaces it.

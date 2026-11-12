@@ -117,9 +117,13 @@ connects.
     \describe{
       \item{\code{text}}{text of the message.}
       \item{\code{type}}{message type (`alert`, `success`, `warning`, `error`, `info`).}
-      \item{\code{theme}}{message theme (See [here](https://ned.im/noty/#/themes) for options)}
+      \item{\code{theme}}{message theme, one of `mint`, `sunset`, `relax`, `nest`,
+`metroui`, `semanticui`, `light`, `bootstrap-v3`, `bootstrap-v4`
+(See [here](https://ned.im/noty/#/themes) for examples).}
       \item{\code{layout}}{message location.}
-      \item{\code{...}}{additional noty arguments.}
+      \item{\code{...}}{additional noty arguments, for example `timeout`, the time
+in milliseconds before the message closes (10000 by default, `FALSE`
+keeps it open until it is clicked).}
       \item{\code{parse_md}}{should message text be processed as markdown before sending.}
       \item{\code{sticky}}{should the message also be shown to every user who
 connects later. Only one sticky message is kept, a new one replaces it.}
