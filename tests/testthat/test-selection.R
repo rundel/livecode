@@ -30,3 +30,18 @@ test_that("a selection ending at column 1 of the next row excludes that row", {
 test_that("large line numbers are not printed in scientific notation", {
   expect_equal(extract_line_nums(sel(c(100000, 1, 100000, 2))), "100000")
 })
+
+test_that("the selection clears when the served file is not the active document", {
+  ctx = list(path = "/tmp/other.R", selection = list(list(range = list(start = c(3, 1), end = c(4, 2)))))
+  local_mocked_bindings(is_rstudio = function() TRUE)
+  local_mocked_bindings(getSourceEditorContext = function(...) ctx, .package = "rstudioapi")
+
+  expect_equal(editor_selection("/tmp/other.R"), "3-4")
+  expect_equal(editor_selection("/tmp/served.R"), "")
+
+  ctx = list(path = "", selection = list())
+  expect_equal(editor_selection("/tmp/served.R"), "")
+
+  local_mocked_bindings(is_rstudio = function() FALSE)
+  expect_null(editor_selection("/tmp/served.R"))
+})

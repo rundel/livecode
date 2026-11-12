@@ -54,7 +54,7 @@ The server performs the following tasks:
   \item Pushes queued messages from the server message queue.
   \item In RStudio, optionally saves the file on each update tick.
   \item In RStudio, broadcasts the current editor selection when the served
-    file is the active document.
+    file is the active document, and an empty selection when it is not.
   \item Serves static assets (JavaScript, CSS, etc.) from the package
     resources directory under \code{/web}.
 }

@@ -225,6 +225,8 @@ editor_save = function(file_id) {
   invisible()
 }
 
+# NULL means the selection is unknown (no IDE), "" that the served file is
+# not the active document, so clients clear the highlight.
 editor_selection = function(file) {
   if (!is_rstudio())
     return(NULL)
@@ -232,10 +234,10 @@ editor_selection = function(file) {
   ctx = rstudioapi::getSourceEditorContext()
   path = ctx[["path"]]
   if (is.null(ctx) || length(path) != 1 || is.na(path) || !nzchar(path))
-    return(NULL)
+    return("")
 
   if (!identical(path.expand(path), file))
-    return(NULL)
+    return("")
 
   extract_line_nums(ctx[["selection"]])
 }
@@ -275,7 +277,7 @@ editor_selection = function(file) {
 #'   \item Pushes queued messages from the server message queue.
 #'   \item In RStudio, optionally saves the file on each update tick.
 #'   \item In RStudio, broadcasts the current editor selection when the served
-#'     file is the active document.
+#'     file is the active document, and an empty selection when it is not.
 #'   \item Serves static assets (JavaScript, CSS, etc.) from the package
 #'     resources directory under \code{/web}.
 #' }
