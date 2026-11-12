@@ -70,6 +70,40 @@ The two IDEs differ in a few ways:
 
 The IDE is detected automatically; set `options(livecode.editor = "none")` (or `"rstudio"`, `"positron"`) to override it.
 
+## Broadcasting over tailcat
+
+The page is served on your local network only. To reach students anywhere, also broadcast the file over [tailcat](https://github.com/tailscale/tailcat), an end-to-end encrypted transport that connects directly when it can and through tailcat's public relays otherwise. This needs the [rtailcat](https://github.com/rundel/rtailcat) package on both ends.
+
+``` r
+# Instructor
+server = livecode::serve_file("lecture.R", tailcat = TRUE)
+#> ✔ Started sharing 'lecture.R' at <http://192.168.1.128:30000>.
+#> ✔ Tailcat broadcast ready. Students run:
+#> livecode::follow("tc...")
+
+# Student, from any R session with internet access
+livecode::follow("tc...")
+```
+
+`follow()` opens a page served by the student's own R session, on 127.0.0.1 only, with the same view as the instructor's page: the highlighted file, the selected lines, and messages, which followers see as plain text. The page reconnects by itself if the broadcast drops or restarts. `stop_all()` stops followers too.
+
+On a running server, `server$start_tailcat()` and `server$stop_tailcat()` start and stop the broadcast and `server$tailcat_address` gives the address; `server$stop()` stops the broadcast as well. The broadcast runs in a separate R process, so a problem in it cannot take down your session, and it keeps going while your session is busy. It only ever sends: nothing a follower sends is read, followers that fall behind are dropped (they reconnect and catch up), and at most 150 are connected at once (`max_clients`).
+
+By default every broadcast gets a fresh address that stops working when the broadcast stops. To post an address before class, create keys ahead of time and pass them at class time:
+
+``` r
+keys = livecode::tailcat_keys("stat101-2026-11-12.rds") # creates the file, readable by you only
+keys$address                                             # post this
+server = livecode::serve_file("lecture.R", tailcat = keys)
+```
+
+Before relying on it in class:
+
+- The address is a credential: anyone who has it can follow the session. Post it where only you can edit, such as the course site or an LMS announcement, not a shared document or chat thread, where someone could swap in the address of their own broadcast. `follow()` only ever displays what it receives; it never runs or saves it.
+- Use fresh keys for each class meeting. Everyone who ever had an address can use it for as long as its keys are used.
+- Students need rtailcat, which is not on CRAN yet. Installing it with `pak::pak("rundel/rtailcat")` builds it from source and needs a [Go toolchain](https://go.dev/doc/install), so have students install it before the first class.
+- Do a dry run in the room. If the network keeps devices apart, all traffic goes through the public relays, which are rate limited and have no uptime guarantee.
+
 ## Managing servers
 
 Every server started in the current session is tracked, so you can find or stop them even if you did not keep the returned object.
@@ -82,4 +116,4 @@ livecode::list_servers()
 livecode::stop_all()
 ```
 
-Running servers are also stopped when the package is unloaded.
+Running servers and followers are also stopped when the package is unloaded.
