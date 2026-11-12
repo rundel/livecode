@@ -19,6 +19,13 @@ lc_server = R6::R6Class(
 
       private$handle = httpuv::startServer(host, port, private$app())
 
+      # The first reading happens here, while serve_file() is still the
+      # running console command and Positron answers editor requests.
+      if (identical(private$editor, "positron")) {
+        positron_watch(self)
+        self$editor_refresh(editor_context(private$editor))
+      }
+
       later::later(function() self$tick(), 0)
     },
 
@@ -29,7 +36,25 @@ lc_server = R6::R6Class(
     stop = function() {
       if (self$is_running())
         httpuv::stopServer(private$handle)
+      if (identical(private$editor, "positron"))
+        positron_unwatch(self)
       invisible(self)
+    },
+
+    # Takes an editor context read outside the tick (Positron, see
+    # positron_watch()): keeps the selection for the tick to broadcast and
+    # saves the file if auto-save is on.
+    editor_refresh = function(ctx) {
+      if (!self$is_running())
+        return(invisible(FALSE))
+
+      private$selection = editor_selection(private$file, ctx, private$editor)
+      if (private$auto_save) {
+        private$guard("Auto-save", function() {
+          editor_save(private$file, private$file_id, ctx, private$editor)
+        })
+      }
+      invisible(TRUE)
     },
 
     n_clients = function() {
@@ -114,7 +139,7 @@ lc_server = R6::R6Class(
     # cache is compared with what was last broadcast rather than with its
     # own previous read, so a refresh triggered elsewhere cannot hide a
     # change from clients.
-    build_frame = function(ctx = editor_context(private$editor)) {
+    build_frame = function(ctx = private$tick_context()) {
       frame = list(interval = private$interval)
 
       content = private$cache$content
@@ -123,7 +148,10 @@ lc_server = R6::R6Class(
         private$state[["content"]] = content
       }
 
-      selection = editor_selection(private$file, ctx, private$editor)
+      selection = if (private$reads_editor_in_tick())
+        editor_selection(private$file, ctx, private$editor)
+      else
+        private$selection
       if (!is.null(selection) && !identical(selection, private$state[["selection"]])) {
         frame[["selection"]] = selection
         private$state[["selection"]] = selection
@@ -163,18 +191,21 @@ lc_server = R6::R6Class(
     },
 
     tick = function() {
-      if (!self$is_running())
+      if (!self$is_running()) {
+        if (identical(private$editor, "positron"))
+          positron_unwatch(self)
         return(invisible(FALSE))
+      }
 
       on.exit(
         later::later(function() self$tick(), private$interval),
         add = TRUE
       )
 
-      ctx = editor_context(private$editor)
+      ctx = private$tick_context()
       private$guard("Following the document", function() private$check_renamed())
 
-      if (private$auto_save) {
+      if (private$auto_save && private$reads_editor_in_tick()) {
         private$guard("Auto-save", function() {
           editor_save(private$file, private$file_id, ctx, private$editor)
         })
@@ -205,6 +236,17 @@ lc_server = R6::R6Class(
     msg_queue = list(),
     sticky_msg = NULL,
     errors = list(),
+    selection = NULL,
+
+    # Positron answers editor requests only while a console command runs, so
+    # its tick never asks; the selection comes from editor_refresh().
+    reads_editor_in_tick = function() {
+      !identical(private$editor, "positron")
+    },
+
+    tick_context = function() {
+      if (private$reads_editor_in_tick()) editor_context(private$editor) else NULL
+    },
 
     # RStudio keeps a document's id through Rename and Save As, so a new path
     # for the id means the editor no longer edits the served file. Positron
@@ -324,7 +366,7 @@ frame_to_json = function(frame) {
 #'   and to notice when it is renamed. Positron has no document ids.
 #' @param interval Numeric update interval in seconds between broadcast ticks.
 #' @param auto_save Logical. Should the file be saved in the editor on each
-#'   tick.
+#'   tick (in Positron, after each console command instead).
 #' @param editor The editor backend, one of \code{"rstudio"},
 #'   \code{"positron"}, or \code{"none"}. Detected by default, see
 #'   \code{\link{serve_file}}.
@@ -338,12 +380,15 @@ frame_to_json = function(frame) {
 #'   \item Tracks the source file using \code{\link{file_cache}}.
 #'   \item Pushes updated file contents to clients when the file changes.
 #'   \item Pushes queued messages from the server message queue.
-#'   \item In RStudio or Positron, optionally saves the file on each update
-#'     tick. Positron can only save the active editor, so there the file is
-#'     saved only while it is the active document.
-#'   \item In RStudio or Positron, broadcasts the current editor selection
-#'     when the served file is the active document, and an empty selection
-#'     when it is not.
+#'   \item In RStudio, optionally saves the file on each update tick and
+#'     broadcasts the current editor selection when the served file is the
+#'     active document, and an empty selection when it is not.
+#'   \item In Positron, which answers editor requests only while a console
+#'     command runs, the tick never calls the editor. A task callback reads
+#'     the editor at startup and after each console command, keeps the
+#'     selection (or an empty one when another document is active) for the
+#'     tick to broadcast, and optionally saves the file if it is the active
+#'     document and has unsaved changes.
 #'   \item In RStudio, notices when the document is renamed or saved under
 #'     another name, tells the instructor once, and stops auto-saving it.
 #'   \item Serves static assets (JavaScript, CSS, etc.) from the package
@@ -517,8 +562,8 @@ lc_server_iface = R6::R6Class(
       private$interval = interval
     },
 
-    init_auto_save = function() {
-      editor_save_warnings(private$editor)
+    init_editor_notes = function() {
+      editor_save_warnings(private$editor, private$auto_save)
     }
   ),
   public = list(
@@ -531,7 +576,8 @@ lc_server_iface = R6::R6Class(
     #' @param port port of the server, defaults to a random value.
     #' @param interval page update interval in seconds.
     #' @param auto_save should the broadcast file be auto saved each update
-    #'   tick (RStudio and Positron, see \code{\link{serve_file}}).
+    #'   tick (RStudio) or after each console command (Positron), see
+    #'   \code{\link{serve_file}}.
     #' @param open_browser should a browser session be opened.
     #' @param tailcat also broadcast over tailcat: `FALSE` (the default),
     #'   `TRUE` for a fresh address, or keys from [tailcat_keys()] for an
@@ -563,8 +609,7 @@ lc_server_iface = R6::R6Class(
         )
       }
 
-      if (auto_save)
-        private$init_auto_save()
+      private$init_editor_notes()
 
       if (open_browser)
         later::later(function() self$open(), 1)
@@ -877,7 +922,8 @@ lc_server_iface = R6::R6Class(
 #' @param interval Numeric. Update interval in seconds for refreshing content
 #'   and pushing updates to clients.
 #' @param auto_save Logical. Should the source file be automatically saved at
-#'   each update interval (RStudio and Positron, see Details).
+#'   each update interval (RStudio) or each time code is run in the console
+#'   (Positron), see the section on editors.
 #' @param open_browser Logical. Should a browser session be opened automatically.
 #' @param tailcat Also broadcast over tailcat, so students anywhere can follow
 #'   with [follow()]: `FALSE` (the default), `TRUE` for a fresh address, or
@@ -890,24 +936,33 @@ lc_server_iface = R6::R6Class(
 #' including:
 #' \itemize{
 #'   \item Updated file contents
-#'   \item Cursor/selection position (RStudio and Positron)
+#'   \item Cursor/selection position (RStudio; in Positron as of the last
+#'     code run in the console)
 #'   \item Messages sent via \code{send_msg()}
 #' }
 #'
 #' @section Editors:
 #' In RStudio and Positron the selection in the editor is highlighted on the
 #' page while the served file is the active document, and the highlight is
-#' cleared when another document is active. With \code{auto_save = TRUE} the
-#' file is saved at each update so unsaved edits reach the page. The two
-#' IDEs differ in a few ways:
+#' cleared when another document is active. The page always updates when the
+#' file is saved. The two IDEs differ in a few ways:
 #' \itemize{
-#'   \item RStudio saves the served document wherever it is open. Positron
-#'     can only save the active editor, so there the file is saved only while
-#'     it is the active document, and edits made while another document is
-#'     active reach the page once you switch back.
-#'   \item Positron saves without running format on save or other save
-#'     actions when its R kernel allows it; otherwise \code{livecode} prints
-#'     a note naming the \code{editor.formatOnSave} and
+#'   \item RStudio is read at every update: the highlight follows the cursor
+#'     and, with \code{auto_save = TRUE}, the served document is saved
+#'     wherever it is open, so students see your edits as you type.
+#'   \item Positron answers editor requests only while a console command
+#'     runs, so \code{livecode} reads it each time code is run in the
+#'     console: the highlight shows the selection as of the last code run,
+#'     not cursor movement, and with \code{auto_save = TRUE} the file is
+#'     saved then, if it is the active document and has unsaved changes.
+#'     For continuous updates while typing, turn on Positron's auto save
+#'     (set \code{files.autoSave} to \code{"afterDelay"} with a short
+#'     \code{files.autoSaveDelay}). Positron's auto save skips format on
+#'     save but still applies \code{files.trimTrailingWhitespace} and
+#'     \code{files.insertFinalNewline} if they are on.
+#'   \item When \code{livecode} saves in Positron it skips format on save
+#'     and other save actions when its R kernel allows it; otherwise it
+#'     prints a note naming the \code{editor.formatOnSave} and
 #'     \code{files.trimTrailingWhitespace} settings, which it cannot read.
 #'     In RStudio a warning is printed when "Strip trailing horizontal
 #'     whitespace when saving" is on, globally or in the project.

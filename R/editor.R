@@ -42,6 +42,9 @@ editor_reset = function() {
 
 editor_reset()
 
+editor_state$watched = list()
+editor_state$callback = FALSE
+
 editor_backends = c("rstudio", "positron", "none")
 
 editor_backend = function() {
@@ -209,6 +212,8 @@ editor_save = function(file, id, ctx, backend = editor_backend()) {
 # Positron can only save the active editor, so the served file is saved
 # only while it is the active document, and only when the buffer differs
 # from the file (save without formatting writes even a clean buffer).
+# Positron answers this only while a console command runs, so it is called
+# from the task callback below, never from the tick.
 positron_save = function(file, ctx) {
   if (!editor_is_active(file, ctx))
     return(FALSE)
@@ -262,23 +267,97 @@ editor_document_path = function(id, backend = editor_backend()) {
   if (is_saved_path(path)) path else NULL
 }
 
-# Warns about editor settings that rewrite the file when auto-save saves it.
-editor_save_warnings = function(backend = editor_backend()) {
+# Positron answers editor requests only while a console command is running,
+# not from the idle event loop where the tick runs. So for Positron servers
+# one task callback, run after each console command, reads the editor and
+# hands the context to every server, which keeps it for the tick.
+positron_callback_name = "livecode-positron"
+
+positron_watch = function(server) {
+  if (!any(vapply(editor_state$watched, identical, logical(1), y = server)))
+    editor_state$watched = c(editor_state$watched, list(server))
+
+  registered = positron_callback_name %in% getTaskCallbackNames()
+  if (!isTRUE(editor_state$callback) || !registered) {
+    # A callback left by an earlier load of the package would read that
+    # copy's servers, so it is replaced rather than kept.
+    if (registered)
+      removeTaskCallback(positron_callback_name)
+    addTaskCallback(function(...) positron_task_callback(...), name = positron_callback_name)
+    editor_state$callback = TRUE
+  }
+  invisible()
+}
+
+positron_unwatch = function(server) {
+  keep = !vapply(editor_state$watched, identical, logical(1), y = server)
+  editor_state$watched = editor_state$watched[keep]
+  if (length(editor_state$watched) == 0)
+    positron_unwatch_all()
+  invisible()
+}
+
+positron_unwatch_all = function() {
+  editor_state$watched = list()
+  if (positron_callback_name %in% getTaskCallbackNames())
+    removeTaskCallback(positron_callback_name)
+  editor_state$callback = FALSE
+  invisible()
+}
+
+# R drops a task callback that errors or returns anything but TRUE.
+positron_task_callback = function(...) {
+  tryCatch(
+    editor_try("Following the editor", positron_refresh),
+    error = function(e) NULL,
+    interrupt = function(e) NULL
+  )
+  TRUE
+}
+
+positron_refresh = function() {
+  servers = Filter(function(srv) srv$is_running(), editor_state$watched)
+  if (length(servers) == 0)
+    return(invisible(FALSE))
+
+  ctx = editor_context("positron")
+  for (srv in servers)
+    srv$editor_refresh(ctx)
+  invisible(TRUE)
+}
+
+# Startup notes about how the editor saves the file and what can rewrite it.
+editor_save_warnings = function(backend = editor_backend(), auto_save = TRUE) {
   switch(
     backend,
-    rstudio = rstudio_whitespace_warning(),
+    rstudio = if (auto_save) rstudio_whitespace_warning(),
     positron = {
-      if (is.null(ps_command_fun()))
-        editor_state$save_unformatted = FALSE
-      cli::cli_alert_info(paste(
-        "In Positron livecode can only save the active editor, so the file is",
-        "saved only while it is the active tab."
-      ))
-      if (isFALSE(editor_state$save_unformatted))
-        positron_format_note()
+      positron_note(auto_save)
+      if (auto_save) {
+        if (is.null(ps_command_fun()))
+          editor_state$save_unformatted = FALSE
+        if (isFALSE(editor_state$save_unformatted))
+          positron_format_note()
+      }
     },
     NULL
   )
+  invisible()
+}
+
+positron_note = function(auto_save) {
+  run = if (auto_save)
+    "livecode saves the file and updates the highlighted lines each time code is run in the console."
+  else
+    "livecode updates the highlighted lines each time code is run in the console."
+
+  cli::cli_alert_info(paste(
+    "In Positron the page updates whenever the file is saved, and", run,
+    "For continuous updates while you type, turn on Positron's auto save: set",
+    "{.field files.autoSave} to {.val afterDelay} with a short {.field files.autoSaveDelay},",
+    "such as {.val {500}} milliseconds. Positron's auto save skips format on save but still applies",
+    "{.field files.trimTrailingWhitespace} and {.field files.insertFinalNewline} if they are on."
+  ))
   invisible()
 }
 

@@ -29,7 +29,8 @@ network interface (see \code{network_interfaces()}).}
 and pushing updates to clients.}
 
 \item{auto_save}{Logical. Should the source file be automatically saved at
-each update interval (RStudio and Positron, see Details).}
+each update interval (RStudio) or each time code is run in the console
+(Positron), see the section on editors.}
 
 \item{open_browser}{Logical. Should a browser session be opened automatically.}
 
@@ -60,7 +61,8 @@ connection to all clients. Updates are pushed at the specified \code{interval},
 including:
 \itemize{
   \item Updated file contents
-  \item Cursor/selection position (RStudio and Positron)
+  \item Cursor/selection position (RStudio; in Positron as of the last
+    code run in the console)
   \item Messages sent via \code{send_msg()}
 }
 }
@@ -68,17 +70,25 @@ including:
 
 In RStudio and Positron the selection in the editor is highlighted on the
 page while the served file is the active document, and the highlight is
-cleared when another document is active. With \code{auto_save = TRUE} the
-file is saved at each update so unsaved edits reach the page. The two
-IDEs differ in a few ways:
+cleared when another document is active. The page always updates when the
+file is saved. The two IDEs differ in a few ways:
 \itemize{
-  \item RStudio saves the served document wherever it is open. Positron
-    can only save the active editor, so there the file is saved only while
-    it is the active document, and edits made while another document is
-    active reach the page once you switch back.
-  \item Positron saves without running format on save or other save
-    actions when its R kernel allows it; otherwise \code{livecode} prints
-    a note naming the \code{editor.formatOnSave} and
+  \item RStudio is read at every update: the highlight follows the cursor
+    and, with \code{auto_save = TRUE}, the served document is saved
+    wherever it is open, so students see your edits as you type.
+  \item Positron answers editor requests only while a console command
+    runs, so \code{livecode} reads it each time code is run in the
+    console: the highlight shows the selection as of the last code run,
+    not cursor movement, and with \code{auto_save = TRUE} the file is
+    saved then, if it is the active document and has unsaved changes.
+    For continuous updates while typing, turn on Positron's auto save
+    (set \code{files.autoSave} to \code{"afterDelay"} with a short
+    \code{files.autoSaveDelay}). Positron's auto save skips format on
+    save but still applies \code{files.trimTrailingWhitespace} and
+    \code{files.insertFinalNewline} if they are on.
+  \item When \code{livecode} saves in Positron it skips format on save
+    and other save actions when its R kernel allows it; otherwise it
+    prints a note naming the \code{editor.formatOnSave} and
     \code{files.trimTrailingWhitespace} settings, which it cannot read.
     In RStudio a warning is printed when "Strip trailing horizontal
     whitespace when saving" is on, globally or in the project.

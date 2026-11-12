@@ -5,4 +5,8 @@
   for (follower in .globals$followers) {
     try(suppressMessages(follower$stop()), silent = TRUE)
   }
+  for (server in editor_state$watched) {
+    try(suppressMessages(server$stop()), silent = TRUE)
+  }
+  try(positron_unwatch_all(), silent = TRUE)
 }

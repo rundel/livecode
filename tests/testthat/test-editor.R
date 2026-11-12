@@ -1,3 +1,5 @@
+callbacks_at_start = getTaskCallbackNames()
+
 test_that("the backend is detected from the environment", {
   withr::local_options(livecode.editor = NULL)
 
@@ -233,26 +235,163 @@ test_that("serve_file with no file serves the active document", {
   expect_true(same_path(srv$path, f))
 })
 
-test_that("a Positron tick with another editor active saves nothing and clears the highlight", {
+test_that("a Positron tick never calls the editor", {
   f = local_test_file("x = 1")
   local_editor("positron")
-  ed = fake_editor(path = "/elsewhere/other.R", contents = "y = 2", selection = sel_rows(1, 2))
+  ed = fake_editor(path = f, contents = "x = 5", selection = sel_rows(1, 2))
 
-  srv = file_stream_server(
-    "127.0.0.1", httpuv::randomPort(host = "127.0.0.1"), f,
-    interval = 10, auto_save = TRUE, editor = "positron"
-  )
-  withr::defer(srv$stop())
+  srv = local_lc_server(f, "positron")
+  ed$calls = list()
+  ed$reads = 0
 
-  srv$tick()
+  msgs = capture_messages(for (i in 1:3) srv$tick())
+  expect_length(msgs, 0)
+  expect_equal(ed$reads, 0)
   expect_length(ed$calls, 0)
+})
+
+test_that("a Positron server reads the editor at startup", {
+  f = local_test_file("x = 1")
+  local_editor("positron")
+  ed = fake_editor(path = f, contents = c("x = 1", ""), selection = sel_rows(2, 3))
+
+  srv = local_lc_server(f, "positron")
+  expect_equal(ed$reads, 1)
+  srv$tick()
+  expect_equal(srv$connect_frame()$selection, "2-3")
+})
+
+test_that("one task callback serves every Positron server and goes with the last", {
+  before = getTaskCallbackNames()
+  f = local_test_file("x = 1")
+  g = local_test_file("y = 1")
+  local_editor("positron")
+  ed = fake_editor(path = f)
+
+  srv1 = local_lc_server(f, "positron")
+  srv2 = local_lc_server(g, "positron")
+  expect_equal(sum(getTaskCallbackNames() == positron_callback_name), 1)
+
+  srv1$stop()
+  expect_true(has_positron_callback())
+  srv2$stop()
+  expect_false(has_positron_callback())
+  expect_equal(getTaskCallbackNames(), before)
+})
+
+test_that("stop_all() removes the task callback", {
+  before = getTaskCallbackNames()
+  f = local_test_file("x = 1")
+  local_editor("positron")
+  ed = fake_editor(path = f)
+
+  srv = local_lc_server(f, "positron")
+  expect_true(has_positron_callback())
+  stop_all()
+  expect_false(has_positron_callback())
+  expect_equal(getTaskCallbackNames(), before)
+})
+
+test_that("RStudio servers register no task callback", {
+  before = getTaskCallbackNames()
+  f = local_test_file("x = 1")
+  local_editor("rstudio")
+  ed = fake_editor(path = f, id = "ID1")
+
+  srv = local_lc_server(f, "rstudio", file_id = "ID1")
+  expect_false(has_positron_callback())
+  expect_equal(getTaskCallbackNames(), before)
+})
+
+test_that("the task callback keeps the selection of the served file only", {
+  f = local_test_file("x = 1")
+  local_editor("positron")
+  ed = fake_editor(path = f, contents = c("x = 1", ""), selection = sel_rows(1, 1))
+  srv = local_lc_server(f, "positron")
+
+  ed$ctx$selection = sel_rows(3, 4)
+  expect_true(positron_task_callback(quote(x), NULL, TRUE, FALSE))
+  srv$tick()
+  expect_equal(srv$connect_frame()$selection, "3-4")
+
+  ed$ctx$path = "/elsewhere/other.R"
+  ed$ctx$selection = sel_rows(1, 2)
+  expect_true(positron_task_callback(quote(x), NULL, TRUE, FALSE))
+  srv$tick()
   expect_equal(srv$connect_frame()$selection, "")
 
   ed$ctx$path = f
-  ed$ctx$contents = "x = 5"
+  ed$ctx$selection = sel_rows(5, 5)
+  positron_task_callback(quote(x), NULL, TRUE, FALSE)
   srv$tick()
-  expect_length(calls_of(ed, "command"), 1)
-  expect_equal(srv$connect_frame()$selection, "1-2")
+  expect_equal(srv$connect_frame()$selection, "5")
+
+  ed$ctx = NULL
+  positron_task_callback(quote(x), NULL, TRUE, FALSE)
+  srv$tick()
+  expect_equal(srv$connect_frame()$selection, "")
+})
+
+test_that("the task callback saves only an active, changed file with auto-save on", {
+  f = local_test_file("x = 1")
+  other = local_test_file("y = 1")
+  local_editor("positron")
+  ed = fake_editor(path = f, contents = c("x = 1", ""))
+  saving = local_lc_server(f, "positron", auto_save = TRUE)
+  not_saving = local_lc_server(other, "positron", auto_save = FALSE)
+
+  ed$calls = list()
+  positron_task_callback(quote(x), NULL, TRUE, FALSE)
+  expect_length(ed$calls, 0)
+
+  ed$ctx$contents = "x = 2"
+  positron_task_callback(quote(x), NULL, TRUE, FALSE)
+  expect_equal(calls_of(ed, "command"), list(list("command", "workbench.action.files.saveWithoutFormatting")))
+
+  ed$calls = list()
+  ed$ctx$path = other
+  ed$ctx$contents = "y = 2"
+  positron_task_callback(quote(x), NULL, TRUE, FALSE)
+  expect_length(ed$calls, 0)
+})
+
+test_that("a failing task callback still returns TRUE and reports once", {
+  f = local_test_file("x = 1")
+  local_editor("positron")
+  ed = fake_editor(path = f)
+  srv = local_lc_server(f, "positron")
+
+  local_mocked_bindings(rs_context = function() stop("No active request"))
+  msgs = capture_messages({
+    expect_true(positron_task_callback(quote(x), NULL, TRUE, FALSE))
+    expect_true(positron_task_callback(quote(x), NULL, TRUE, FALSE))
+  })
+  expect_equal(sum(grepl("No active request", msgs)), 1)
+
+  local_mocked_bindings(positron_refresh = function() stop("unexpected"))
+  msgs = capture_messages({
+    expect_true(positron_task_callback(quote(x), NULL, TRUE, FALSE))
+    expect_true(positron_task_callback(quote(x), NULL, TRUE, FALSE))
+  })
+  expect_equal(sum(grepl("unexpected", msgs)), 1)
+})
+
+test_that("an RStudio tick reads the editor and saves as before", {
+  f = local_test_file("x = 1")
+  local_editor("rstudio")
+  ed = fake_editor(path = f, id = "ID1", selection = sel_rows(2, 2))
+  local_mocked_bindings(rs_document_path = function(id) f)
+
+  srv = local_lc_server(f, "rstudio", file_id = "ID1")
+  expect_equal(ed$reads, 0)
+  srv$tick()
+  expect_equal(ed$reads, 1)
+  expect_equal(calls_of(ed, "save"), list(list("save", "ID1")))
+  expect_equal(srv$connect_frame()$selection, "2")
+
+  ed$ctx$path = "/elsewhere/other.R"
+  srv$tick()
+  expect_equal(srv$connect_frame()$selection, "")
 })
 
 test_that("RStudio warns about stripping whitespace from the global or project setting", {
@@ -270,18 +409,26 @@ test_that("RStudio warns about stripping whitespace from the global or project s
   expect_no_message(editor_save_warnings())
 })
 
-test_that("Positron explains its save limits once", {
+test_that("Positron explains when the page updates", {
   local_editor("positron")
   local_mocked_bindings(ps_command_fun = function() NULL)
   msgs = capture_messages(editor_save_warnings())
-  expect_true(any(grepl("active tab", msgs)))
-  expect_true(any(grepl("trimTrailingWhitespace", msgs)))
+  expect_true(any(grepl("each time code is run", msgs)))
+  expect_true(any(grepl("files.autoSave", msgs)))
+  expect_true(any(grepl("cannot save without formatting", msgs)))
 
   local_editor("positron")
   local_mocked_bindings(ps_command_fun = function() function(command) NULL)
   msgs = capture_messages(editor_save_warnings())
-  expect_true(any(grepl("active tab", msgs)))
-  expect_false(any(grepl("trimTrailingWhitespace", msgs)))
+  expect_true(any(grepl("saves the file", msgs)))
+  expect_false(any(grepl("cannot save without formatting", msgs)))
+
+  local_editor("positron")
+  local_mocked_bindings(ps_command_fun = function() NULL)
+  msgs = capture_messages(editor_save_warnings(auto_save = FALSE))
+  expect_true(any(grepl("files.autoSave", msgs)))
+  expect_false(any(grepl("saves the file", msgs)))
+  expect_false(any(grepl("cannot save without formatting", msgs)))
 })
 
 test_that("RStudio notices a renamed document once and stops saving it", {
@@ -326,4 +473,8 @@ test_that("an unknown document id is not taken for a rename", {
   expect_no_message(srv$tick())
   expect_equal(calls_of(ed, "save"), list(list("save", "ID1")))
   expect_null(editor_document_path("ID1", "positron"))
+})
+
+test_that("the tests leave no task callback registered", {
+  expect_equal(getTaskCallbackNames(), callbacks_at_start)
 })

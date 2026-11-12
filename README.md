@@ -53,15 +53,18 @@ The page highlights the file according to its extension (R, Quarto and R Markdow
 
 ## Editors
 
-livecode works with RStudio and Positron. In either IDE, `serve_file()` with no arguments shares the active document, the lines you select are highlighted on the page, and with `auto_save = TRUE` (the default) the file is saved at every update so students see your edits as you type. From any other R session pass the path of the file; the page then updates whenever the file is saved.
+livecode works with RStudio and Positron. In either IDE, `serve_file()` with no arguments shares the active document, the lines you select are highlighted on the page, and the page updates whenever the file is saved. In RStudio, `auto_save = TRUE` (the default) saves the file at every update so students see your edits as you type. From any other R session pass the path of the file; the page then updates whenever the file is saved.
+
+Positron answers requests from R only while a console command is running, so livecode reads it each time you run code in the console: it saves the file (with `auto_save = TRUE`) and updates the highlighted lines then. For continuous updates while you type, turn on Positron's auto save by setting `files.autoSave` to `afterDelay` with a short `files.autoSaveDelay` (for example 500 milliseconds). Positron's auto save skips format on save, but still applies `files.trimTrailingWhitespace` and `files.insertFinalNewline` if they are on.
 
 The two IDEs differ in a few ways:
 
-| Behavior           | RStudio                                                                    | Positron                                                                                                         |
-|--------------------|----------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------|
-| Auto-save          | Saves the served document wherever it is open                              | Saves only while the served file is the active editor tab                                                        |
-| Formatting on save | Warns if "Strip trailing horizontal whitespace when saving" is on          | Saves without formatting when possible, otherwise names `editor.formatOnSave` and `files.trimTrailingWhitespace` |
-| Rename or Save As  | Reported once; the original file keeps being served and is no longer saved | Not detected; the original file keeps being served                                                               |
+| Behavior           | RStudio                                                                    | Positron                                                                                                                                 |
+|--------------------|----------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------|
+| Highlight          | Follows the cursor and selection                                           | Shows the selection as of the last code run in the console, not cursor movement                                                          |
+| Auto-save          | Saves the served document at every update, wherever it is open             | Saves each time code is run in the console, if the served file is the active editor and has unsaved changes; or use Positron's auto save |
+| Formatting on save | Warns if "Strip trailing horizontal whitespace when saving" is on          | Saves without formatting when possible, otherwise names `editor.formatOnSave` and `files.trimTrailingWhitespace`                         |
+| Rename or Save As  | Reported once; the original file keeps being served and is no longer saved | Not detected; the original file keeps being served                                                                                       |
 
 The IDE is detected automatically; set `options(livecode.editor = "none")` (or `"rstudio"`, `"positron"`) to override it.
 

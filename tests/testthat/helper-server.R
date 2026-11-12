@@ -81,10 +81,14 @@ fake_editor = function(path = NULL, id = NULL, contents = NULL, selection = list
   ed = new.env()
   ed$ctx = list(id = id, path = path, contents = contents, selection = selection)
   ed$calls = list()
+  ed$reads = 0
   log = function(...) ed$calls[[length(ed$calls) + 1]] = list(...)
 
   testthat::local_mocked_bindings(
-    rs_context = function() ed$ctx,
+    rs_context = function() {
+      ed$reads = ed$reads + 1
+      ed$ctx
+    },
     rs_save = function(id = NULL) log("save", id),
     rs_navigate = function(file) log("navigate", file),
     ps_execute_command = function(command) log("command", command),
@@ -99,4 +103,17 @@ calls_of = function(ed, kind) {
 
 sel_rows = function(first, last) {
   list(list(range = list(start = c(row = first, column = 1), end = c(row = last, column = 2)), text = ""))
+}
+
+local_lc_server = function(file, editor, auto_save = TRUE, file_id = NULL, env = parent.frame()) {
+  srv = file_stream_server(
+    "127.0.0.1", httpuv::randomPort(host = "127.0.0.1"), file, file_id = file_id,
+    interval = 10, auto_save = auto_save, editor = editor
+  )
+  withr::defer(srv$stop(), envir = env)
+  srv
+}
+
+has_positron_callback = function() {
+  positron_callback_name %in% getTaskCallbackNames()
 }

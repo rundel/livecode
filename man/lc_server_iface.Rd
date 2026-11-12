@@ -63,7 +63,8 @@ in RStudio or Positron.}
       \item{\code{port}}{port of the server, defaults to a random value.}
       \item{\code{interval}}{page update interval in seconds.}
       \item{\code{auto_save}}{should the broadcast file be auto saved each update
-tick (RStudio and Positron, see \code{\link{serve_file}}).}
+tick (RStudio) or after each console command (Positron), see
+\code{\link{serve_file}}.}
       \item{\code{open_browser}}{should a browser session be opened.}
       \item{\code{tailcat}}{also broadcast over tailcat: `FALSE` (the default),
 `TRUE` for a fresh address, or keys from [tailcat_keys()] for an
