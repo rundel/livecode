@@ -283,3 +283,47 @@ test_that("Positron explains its save limits once", {
   expect_true(any(grepl("active tab", msgs)))
   expect_false(any(grepl("trimTrailingWhitespace", msgs)))
 })
+
+test_that("RStudio notices a renamed document once and stops saving it", {
+  f = local_test_file("x = 1")
+  local_editor("rstudio")
+  ed = fake_editor(path = f, id = "ID1")
+  doc_path = f
+  local_mocked_bindings(rs_document_path = function(id) doc_path)
+
+  srv = file_stream_server(
+    "127.0.0.1", httpuv::randomPort(host = "127.0.0.1"), f, file_id = "ID1",
+    interval = 10, auto_save = TRUE, editor = "rstudio"
+  )
+  withr::defer(srv$stop())
+
+  expect_no_message(srv$tick())
+  expect_length(calls_of(ed, "save"), 1)
+
+  doc_path = file.path(dirname(f), "renamed.R")
+  ed$ctx$path = doc_path
+  msgs = capture_messages({
+    srv$tick()
+    srv$tick()
+  })
+  expect_equal(sum(grepl("renamed or saved as", msgs)), 1)
+  expect_length(calls_of(ed, "save"), 1)
+  expect_equal(srv$connect_frame()$selection, "")
+})
+
+test_that("an unknown document id is not taken for a rename", {
+  f = local_test_file("x = 1")
+  local_editor("rstudio")
+  ed = fake_editor(path = "/elsewhere/other.R", id = "ID2")
+  local_mocked_bindings(rs_document_path = function(id) stop("no document with that id"))
+
+  srv = file_stream_server(
+    "127.0.0.1", httpuv::randomPort(host = "127.0.0.1"), f, file_id = "ID1",
+    interval = 10, auto_save = TRUE, editor = "rstudio"
+  )
+  withr::defer(srv$stop())
+
+  expect_no_message(srv$tick())
+  expect_equal(calls_of(ed, "save"), list(list("save", "ID1")))
+  expect_null(editor_document_path("ID1", "positron"))
+})

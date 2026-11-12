@@ -135,6 +135,7 @@ lc_server = R6::R6Class(
       )
 
       ctx = editor_context(private$editor)
+      private$guard("Following the document", function() private$check_renamed())
 
       if (private$auto_save) {
         private$guard("Auto-save", function() {
@@ -166,6 +167,26 @@ lc_server = R6::R6Class(
     msg_queue = list(),
     sticky_msg = NULL,
     errors = list(),
+
+    # RStudio keeps a document's id through Rename and Save As, so a new path
+    # for the id means the editor no longer edits the served file. Positron
+    # cannot look a document up by id, so there the old path stays served.
+    check_renamed = function() {
+      if (!identical(private$editor, "rstudio") || is.null(private$file_id))
+        return(invisible(FALSE))
+
+      path = editor_document_path(private$file_id, private$editor)
+      if (is.null(path) || same_path(path, private$file))
+        return(invisible(FALSE))
+
+      private$file_id = NULL
+      cli::cli_alert_warning(paste(
+        "livecode: {.file {basename(private$file)}} was renamed or saved as {.file {path}} in RStudio.",
+        "livecode keeps serving {.file {private$file}} from disk and no longer auto-saves it.",
+        "Run {.code serve_file()} again to share the new file."
+      ))
+      invisible(TRUE)
+    },
 
     # Reports a failing step once, until it succeeds again, instead of on
     # every tick.
