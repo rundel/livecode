@@ -1,0 +1,10 @@
+^livecode\.Rproj$
+^\.Rproj\.user$
+^\.Rhistory$
+^\.RData$
+^\.DS_Store$
+^\.httr-oauth$
+^LICENSE\.md$
+^README\.Rmd$
+^\.github$
+^notes$
