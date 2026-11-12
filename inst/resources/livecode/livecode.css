@@ -43,6 +43,130 @@ body {
   }
 }
 
+/* Viewer settings: a faint gear in the bottom right, left of the progress
+   circle and clear of the status pill on the left. Code is left aligned, so
+   this corner is the one least likely to hold text, and the view leaves room
+   below the last line so nothing stays under it. */
+.livecode-settings[hidden],
+.livecode-settings-panel[hidden] {
+  display: none;
+}
+
+.livecode-settings-toggle {
+  position: fixed;
+  right: 42px;
+  bottom: 6px;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  color: #57606a;
+  opacity: 0.4;
+  cursor: pointer;
+  transition: opacity 0.15s ease, background-color 0.15s ease;
+}
+
+.livecode-settings-toggle:hover,
+.livecode-settings-toggle:focus-visible,
+.livecode-settings-toggle[aria-expanded="true"] {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.95);
+  border-color: #d0d7de;
+}
+
+.livecode-settings button:focus-visible,
+.livecode-settings input:focus-visible {
+  outline: 2px solid #0969da;
+  outline-offset: 2px;
+}
+
+.livecode-settings-panel {
+  position: fixed;
+  right: 10px;
+  bottom: 46px;
+  z-index: 1001;
+  box-sizing: border-box;
+  max-width: calc(100vw - 20px);
+  padding: 10px 12px;
+  border: 1px solid #d0d7de;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #1f2328;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+  font-size: 14px;
+  line-height: 1.3;
+}
+
+.livecode-settings-size {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.livecode-settings-size > span {
+  margin-right: 4px;
+}
+
+.livecode-settings-size button {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  background: #f6f8fa;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.livecode-settings-size button:hover {
+  background: #eaeef2;
+}
+
+.livecode-settings-size button[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.livecode-settings-size output {
+  min-width: 4ch;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.livecode-settings-panel label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  cursor: pointer;
+}
+
+.livecode-settings-panel input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+
+.livecode-settings-panel label:has(input:disabled) {
+  opacity: 0.5;
+  cursor: default;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .livecode-settings-toggle {
+    transition: none;
+  }
+}
+
 .noty_body h1,
 .noty_body h2,
 .noty_body h3,

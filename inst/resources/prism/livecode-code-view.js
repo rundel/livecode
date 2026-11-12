@@ -93,6 +93,8 @@
     this.text = null;
     this.selection = "";
     this.lastUserScroll = -Infinity;
+    this.followCursor = true;
+    this.highlightLines = true;
 
     var markUserScroll = function () { self.lastUserScroll = Date.now(); };
     ["wheel", "touchmove", "mousedown", "keydown"].forEach(function (type) {
@@ -119,6 +121,54 @@
     this.selection = selection;
     this.mark();
     this.follow();
+  };
+
+  // Viewer settings. With the highlight off the selection is still tracked,
+  // only hidden, so it shows again when the highlight is turned back on.
+  CodeView.prototype.setFollow = function (on) {
+    on = !!on;
+    if (on === this.followCursor) return;
+    this.followCursor = on;
+    if (on) this.follow(true);
+  };
+
+  CodeView.prototype.setHighlight = function (on) {
+    on = !!on;
+    if (on === this.highlightLines) return;
+    this.highlightLines = on;
+    this.root.classList.toggle("lc-no-hl", !on);
+    if (on) this.follow(true);
+  };
+
+  // The first line not wholly above the top of the view.
+  CodeView.prototype.topLine = function () {
+    var lines = this.code.children;
+    if (!lines.length) return null;
+    var top = this.root.getBoundingClientRect().top;
+    var lo = 0;
+    var hi = lines.length - 1;
+    while (lo < hi) {
+      var mid = (lo + hi) >> 1;
+      if (lines[mid].getBoundingClientRect().bottom <= top) lo = mid + 1;
+      else hi = mid;
+    }
+    return lines[lo];
+  };
+
+  // Keeps the reader's place: the line at the top of the view stays there,
+  // scrolled into it by the same fraction of its height.
+  CodeView.prototype.setFontSize = function (px) {
+    var root = this.root;
+    var atTop = root.scrollTop === 0;
+    var line = atTop ? null : this.topLine();
+    var viewTop = root.getBoundingClientRect().top;
+    var before = line && line.getBoundingClientRect();
+    var fraction = before && before.height > 0 ? Math.max(0, (viewTop - before.top) / before.height) : 0;
+
+    root.style.setProperty("--lc-code-size", px + "px");
+    if (!line) return;
+    var after = line.getBoundingClientRect();
+    root.scrollTop += after.top - viewTop + fraction * after.height;
   };
 
   CodeView.prototype.render = function () {
@@ -176,10 +226,12 @@
     return first;
   };
 
-  // Scrolls the first selected line into view, unless it is already visible
-  // or the viewer scrolled by hand recently.
-  CodeView.prototype.follow = function () {
-    if (Date.now() - this.lastUserScroll < USER_SCROLL_GRACE_MS) return;
+  // Scrolls the first selected line into view, unless it is already visible,
+  // the viewer turned following or the highlight off, or (unless forced, as
+  // when the viewer turns following back on) scrolled by hand recently.
+  CodeView.prototype.follow = function (force) {
+    if (!this.followCursor || !this.highlightLines) return;
+    if (!force && Date.now() - this.lastUserScroll < USER_SCROLL_GRACE_MS) return;
     var first = this.code.querySelector(".lc-line.lc-hl");
     if (!first) return;
 

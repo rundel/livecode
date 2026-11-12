@@ -23,11 +23,37 @@
     <script src="web/progressbar/progressbar.min.js"></script>
     <script src="web/noty/noty.min.js"></script>
     {prism_scripts}
+    <script src="web/livecode/livecode-settings.js"></script>
     <script src="web/livecode/livecode.js"></script>
   </head>
   <body data-message-mode="{message_mode}">
     <main id="livecode-view" class="livecode-view" data-language="{lang}" tabindex="0"><pre><code></code></pre></main>
     <div id="livecode-status" class="livecode-status" role="status" aria-live="polite" hidden></div>
     <div id="progressbar" aria-hidden="true"></div>
+    <div id="livecode-settings" class="livecode-settings" hidden>
+      <button type="button" id="livecode-settings-toggle" class="livecode-settings-toggle" aria-expanded="false" aria-controls="livecode-settings-panel" aria-label="Display settings" title="Display settings">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+          <mask id="livecode-gear-hole"><rect width="24" height="24" fill="white"/><circle cx="12" cy="12" r="3.2" fill="black"/></mask>
+          <g fill="currentColor" mask="url(#livecode-gear-hole)">
+            <rect x="10" y="1.5" width="4" height="21" rx="1"/>
+            <rect x="10" y="1.5" width="4" height="21" rx="1" transform="rotate(45 12 12)"/>
+            <rect x="10" y="1.5" width="4" height="21" rx="1" transform="rotate(90 12 12)"/>
+            <rect x="10" y="1.5" width="4" height="21" rx="1" transform="rotate(135 12 12)"/>
+            <circle cx="12" cy="12" r="7.5"/>
+          </g>
+        </svg>
+      </button>
+      <div id="livecode-settings-panel" class="livecode-settings-panel" role="group" aria-label="Display settings" hidden>
+        <div class="livecode-settings-size" role="group" aria-labelledby="livecode-size-label">
+          <span id="livecode-size-label">Font size</span>
+          <button type="button" data-size="-1" aria-label="Decrease font size">&minus;</button>
+          <output id="livecode-size-value" aria-live="polite">13px</output>
+          <button type="button" data-size="1" aria-label="Increase font size">+</button>
+          <button type="button" data-size="reset" aria-label="Reset font size">Reset</button>
+        </div>
+        <label><input type="checkbox" id="livecode-follow" checked> Follow cursor</label>
+        <label><input type="checkbox" id="livecode-highlight" checked> Highlight lines</label>
+      </div>
+    </div>
   </body>
 </html>

@@ -200,7 +200,14 @@
     if (mode === "text" || mode === "html") state.options.messageMode = mode;
 
     state.view = window.livecodeCodeView.create(document.getElementById("livecode-view"));
-    window.livecode = { view: state.view, handleFrame: handleFrame, setStatus: setStatus };
+    window.livecode = { view: state.view, handleFrame: handleFrame, setStatus: setStatus, settings: null };
+
+    // The settings are optional: if they fail, the page still updates.
+    try {
+      window.livecode.settings = window.livecodeSettings.mount(state.view, document);
+    } catch (err) {
+      report("display settings", err);
+    }
 
     window.addEventListener("online", retryNow);
     document.addEventListener("visibilitychange", function () {

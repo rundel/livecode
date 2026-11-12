@@ -56,6 +56,8 @@ The server listens on the address of your preferred network interface, which you
 
 The page highlights the file according to its extension (R, Quarto and R Markdown, Python, SQL, and other common languages, with anything else shown as plain text), numbers the lines as they are in the file, and highlights and scrolls to the lines selected in the editor. If the connection drops, for example while the server restarts, the page shows that it is reconnecting and catches up on its own.
 
+Each viewer can change the code font size and turn off following your cursor or the line highlighting from the gear button in the bottom right corner of the page. These settings only affect that viewer's page and reset to the defaults when the page is reloaded.
+
 ## Editors
 
 livecode works with RStudio and Positron. In either IDE, `serve_file()` with no arguments shares the active document, the page shows the editor's text of that document, including edits you have not saved, and the lines you select are highlighted while it is the active document. Nothing needs to be saved for students to see your edits. From any other R session pass the path of the file; the page then shows the file on disk and updates whenever it is saved.

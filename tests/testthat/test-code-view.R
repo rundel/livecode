@@ -173,3 +173,32 @@ test_that("text normalization and selection parsing", {
   expect_equal(sel("1-10,12"), list(list(1L, 10L), list(12L, 12L)))
   expect_equal(sel("5-2,x,0,7"), list(list(2L, 5L), list(7L, 7L)))
 })
+
+test_that("the display settings clamp the font size", {
+  skip_if_not_installed("V8")
+  ctx = V8::v8()
+  ctx$eval("var window = this;")
+  ctx$source(file.path(prism_dir(), "livecode", "livecode-settings.js"))
+
+  expect_equal(ctx$get("[livecodeSettings.DEFAULT_SIZE, livecodeSettings.MIN_SIZE, livecodeSettings.MAX_SIZE]"), c(13, 9, 32))
+
+  clamp = function(x) {
+    ctx$assign("x", x)
+    ctx$get("livecodeSettings.clampSize(x)")
+  }
+  expect_equal(clamp(14), 14)
+  expect_equal(clamp(14.6), 15)
+  expect_equal(clamp(2), 9)
+  expect_equal(clamp(100), 32)
+  expect_equal(clamp("20"), 20)
+  expect_equal(clamp("big"), 13)
+  expect_equal(clamp(""), 13)
+  expect_equal(ctx$get("livecodeSettings.clampSize(null)"), 13)
+  expect_equal(ctx$get("livecodeSettings.clampSize(Infinity)"), 13)
+
+  step = function(size, delta) ctx$get(paste0("livecodeSettings.stepSize(", size, ", ", delta, ")"))
+  expect_equal(step(13, 1), 14)
+  expect_equal(step(13, -1), 12)
+  expect_equal(step(9, -1), 9)
+  expect_equal(step(32, 1), 32)
+})

@@ -30,7 +30,8 @@
 
 .livecode-view > pre {
   margin: 0;
-  padding: 4px 0;
+  /* Room below the last line so the page's indicators never cover it */
+  padding: 4px 0 44px;
   background: transparent;
   border: 0;
   color: var(--lc-fg);
@@ -80,6 +81,12 @@
 .livecode-view .lc-line.lc-hl {
   background-color: var(--lc-hl-bg);
   box-shadow: inset 3px 0 0 var(--lc-hl-edge);
+}
+
+/* The viewer turned the highlight off; the selection is kept, only hidden */
+.livecode-view.lc-no-hl .lc-line.lc-hl {
+  background-color: transparent;
+  box-shadow: none;
 }
 
 .livecode-view .token.comment,

@@ -44,3 +44,16 @@ test_that("the connect frame carries the file's language", {
   expect_equal(frame$lang, "qmd")
   expect_null(srv$build_frame()$lang)
 })
+
+test_that("the page carries the viewer's display settings", {
+  page = livecode_page("lecture.R")
+  expect_match(page, "<script src=\"web/livecode/livecode-settings.js\"></script>\n    <script src=\"web/livecode/livecode.js\"></script>", fixed = TRUE)
+  expect_match(page, "<div id=\"livecode-settings\" class=\"livecode-settings\" hidden>", fixed = TRUE)
+  expect_match(page, "<button type=\"button\" id=\"livecode-settings-toggle\"[^>]*aria-expanded=\"false\"[^>]*aria-controls=\"livecode-settings-panel\"[^>]*aria-label=\"Display settings\"")
+  expect_match(page, "id=\"livecode-settings-panel\"[^>]* hidden>")
+  for (kind in c("-1", "1", "reset"))
+    expect_match(page, paste0("<button type=\"button\" data-size=\"", kind, "\" aria-label=\"[^\"]+\">"))
+  expect_match(page, "<output id=\"livecode-size-value\"", fixed = TRUE)
+  expect_match(page, "<label><input type=\"checkbox\" id=\"livecode-follow\" checked> Follow cursor</label>", fixed = TRUE)
+  expect_match(page, "<label><input type=\"checkbox\" id=\"livecode-highlight\" checked> Highlight lines</label>", fixed = TRUE)
+})
