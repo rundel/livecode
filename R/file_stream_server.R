@@ -12,19 +12,14 @@ lc_server = R6::R6Class(
       private$interval = interval
       private$auto_save = isTRUE(auto_save)
       private$editor = editor
+      private$by_id = identical(editor, "rstudio") && !is.null(file_id)
       private$cache = file_cache(file)
-      private$state = list(content = private$cache$content, selection = NULL)
+      private$disk_seen = private$cache$content
+      private$state = list(content = private$disk_seen, selection = NULL)
       private$websockets = new.env(parent = emptyenv())
       private$sinks = list()
 
       private$handle = httpuv::startServer(host, port, private$app())
-
-      # The first reading happens here, while serve_file() is still the
-      # running console command and Positron answers editor requests.
-      if (identical(private$editor, "positron")) {
-        positron_watch(self)
-        self$editor_refresh(editor_context(private$editor))
-      }
 
       later::later(function() self$tick(), 0)
     },
@@ -36,25 +31,19 @@ lc_server = R6::R6Class(
     stop = function() {
       if (self$is_running())
         httpuv::stopServer(private$handle)
-      if (identical(private$editor, "positron"))
-        positron_unwatch(self)
       invisible(self)
     },
 
-    # Takes an editor context read outside the tick (Positron, see
-    # positron_watch()): keeps the selection for the tick to broadcast and
-    # saves the file if auto-save is on.
-    editor_refresh = function(ctx) {
-      if (!self$is_running())
-        return(invisible(FALSE))
+    # The served file, which follows an RStudio document through a rename.
+    path = function() {
+      private$file
+    },
 
-      private$selection = editor_selection(private$file, ctx, private$editor)
-      if (private$auto_save) {
-        private$guard("Auto-save", function() {
-          editor_save(private$file, private$file_id, ctx, private$editor)
-        })
-      }
-      invisible(TRUE)
+    # Positron answers editor requests only while a console command runs, so
+    # its tick reads the editor only while the blocking loop is running.
+    set_blocking = function(blocking) {
+      private$blocking = isTRUE(blocking)
+      invisible(self)
     },
 
     n_clients = function() {
@@ -136,22 +125,19 @@ lc_server = R6::R6Class(
     },
 
     # Builds the next update and records it as the broadcast state. The
-    # cache is compared with what was last broadcast rather than with its
-    # own previous read, so a refresh triggered elsewhere cannot hide a
-    # change from clients.
-    build_frame = function(ctx = private$tick_context()) {
+    # content is compared with what was last broadcast rather than with the
+    # previous read, so a client connecting in between cannot hide a change
+    # from the others.
+    build_frame = function() {
       frame = list(interval = private$interval)
 
-      content = private$cache$content
+      content = private$current_content()
       if (!identical(content, private$state[["content"]])) {
         frame[["content"]] = content
         private$state[["content"]] = content
       }
 
-      selection = if (private$reads_editor_in_tick())
-        editor_selection(private$file, ctx, private$editor)
-      else
-        private$selection
+      selection = private$selection
       if (!is.null(selection) && !identical(selection, private$state[["selection"]])) {
         frame[["selection"]] = selection
         private$state[["selection"]] = selection
@@ -191,27 +177,24 @@ lc_server = R6::R6Class(
     },
 
     tick = function() {
-      if (!self$is_running()) {
-        if (identical(private$editor, "positron"))
-          positron_unwatch(self)
+      if (!self$is_running())
         return(invisible(FALSE))
-      }
 
       on.exit(
         later::later(function() self$tick(), private$interval),
         add = TRUE
       )
 
-      ctx = private$tick_context()
-      private$guard("Following the document", function() private$check_renamed())
+      private$buffer_fresh = FALSE
+      private$guard("Reading the editor", function() private$read_editor())
 
-      if (private$auto_save && private$reads_editor_in_tick()) {
+      if (private$auto_save && identical(private$editor, "rstudio")) {
         private$guard("Auto-save", function() {
-          editor_save(private$file, private$file_id, ctx, private$editor)
+          editor_save(private$file_id, private$editor)
         })
       }
       private$guard("Broadcast update", function() {
-        frame = self$build_frame(ctx)
+        frame = self$build_frame()
         self$emit(frame)
       })
 
@@ -228,7 +211,12 @@ lc_server = R6::R6Class(
     interval = NULL,
     auto_save = FALSE,
     editor = "none",
+    by_id = FALSE,
+    blocking = FALSE,
     cache = NULL,
+    disk_seen = NULL,
+    buffer = NULL,
+    buffer_fresh = FALSE,
     state = NULL,
     websockets = NULL,
     sinks = NULL,
@@ -238,33 +226,71 @@ lc_server = R6::R6Class(
     errors = list(),
     selection = NULL,
 
-    # Positron answers editor requests only while a console command runs, so
-    # its tick never asks; the selection comes from editor_refresh().
-    reads_editor_in_tick = function() {
-      !identical(private$editor, "positron")
+    reads_editor = function() {
+      identical(private$editor, "rstudio") ||
+        (identical(private$editor, "positron") && private$blocking)
     },
 
-    tick_context = function() {
-      if (private$reads_editor_in_tick()) editor_context(private$editor) else NULL
+    read_editor = function() {
+      if (!private$reads_editor())
+        return(invisible(FALSE))
+
+      snap = editor_read(private$file, private$file_id, private$editor, by_id = private$by_id)
+      if (is.null(snap))
+        return(invisible(FALSE))
+
+      if (!is.null(snap[["by_id_error"]])) {
+        private$by_id = FALSE
+        cli::cli_alert_warning(paste(
+          "livecode: cannot read {.file {basename(private$file)}} from RStudio by its document id",
+          "({snap[['by_id_error']]}), so it is read only while it is the active document."
+        ))
+      }
+
+      if (!is.null(snap[["contents"]])) {
+        private$buffer = snap[["contents"]]
+        private$buffer_fresh = TRUE
+      }
+      private$selection = snap[["selection"]]
+
+      if (identical(private$editor, "rstudio") && is_saved_path(snap[["path"]]))
+        private$follow(snap[["path"]])
+
+      invisible(TRUE)
     },
 
-    # RStudio keeps a document's id through Rename and Save As, so a new path
-    # for the id means the editor no longer edits the served file. Positron
-    # cannot look a document up by id, so there the old path stays served.
-    check_renamed = function() {
-      if (!identical(private$editor, "rstudio") || is.null(private$file_id))
+    # The editor's buffer when there is one, else the file on disk. A buffer
+    # not read this tick (another tab is active in Positron) is kept, unless
+    # the file on disk changed since, which then is the newer text.
+    current_content = function() {
+      disk = private$cache$content
+      if (!identical(disk, private$disk_seen)) {
+        private$disk_seen = disk
+        if (!private$buffer_fresh)
+          private$buffer = NULL
+      }
+      private$buffer_fresh = FALSE
+
+      if (is.null(private$buffer)) disk else private$buffer
+    },
+
+    # RStudio keeps a document's id through Rename and Save As, so the
+    # document read by id is followed to its new path.
+    follow = function(path) {
+      if (same_path(path, private$file))
         return(invisible(FALSE))
 
-      path = editor_document_path(private$file_id, private$editor)
-      if (is.null(path) || same_path(path, private$file))
-        return(invisible(FALSE))
+      old = private$file
+      private$file = path
+      private$page = livecode_page(path, private$lang)
+      if (file.exists(path)) {
+        private$cache = file_cache(path)
+        private$disk_seen = private$cache$content
+      }
 
-      private$file_id = NULL
-      cli::cli_alert_warning(paste(
-        "livecode: {.file {basename(private$file)}} was renamed or saved as {.file {path}} in RStudio.",
-        "livecode keeps serving {.file {private$file}} from disk and no longer auto-saves it.",
-        "Run {.code serve_file()} again to share the new file."
-      ))
+      cli::cli_alert_info(
+        "livecode: {.file {basename(old)}} was renamed or saved as {.file {path}}, livecode now serves {.file {basename(path)}}."
+      )
       invisible(TRUE)
     },
 
@@ -362,11 +388,12 @@ frame_to_json = function(frame) {
 #'   server should listen.
 #' @param port Integer port number for the server.
 #' @param file Path to the file being broadcast.
-#' @param file_id Optional RStudio document id of the file, used to save it
-#'   and to notice when it is renamed. Positron has no document ids.
+#' @param file_id Optional RStudio document id of the file, used to read its
+#'   buffer while another tab is active, to save it, and to follow it through
+#'   a rename. Positron has no document ids.
 #' @param interval Numeric update interval in seconds between broadcast ticks.
-#' @param auto_save Logical. Should the file be saved in the editor on each
-#'   tick (in Positron, after each console command instead).
+#' @param auto_save Logical. Should the document be saved in RStudio on each
+#'   tick. Ignored in Positron and outside an IDE.
 #' @param editor The editor backend, one of \code{"rstudio"},
 #'   \code{"positron"}, or \code{"none"}. Detected by default, see
 #'   \code{\link{serve_file}}.
@@ -377,20 +404,25 @@ frame_to_json = function(frame) {
 #' \itemize{
 #'   \item Serves an HTML page that highlights the file with Prism in the
 #'     language given by its extension (see \code{file_code_language()}).
-#'   \item Tracks the source file using \code{\link{file_cache}}.
-#'   \item Pushes updated file contents to clients when the file changes.
+#'   \item Broadcasts the editor's buffer of the served document, unsaved
+#'     edits included, when it can be read, and otherwise the file on disk,
+#'     tracked with \code{\link{file_cache}}. Content is sent only when it
+#'     differs from what was last broadcast.
 #'   \item Pushes queued messages from the server message queue.
-#'   \item In RStudio, optionally saves the file on each update tick and
-#'     broadcasts the current editor selection when the served file is the
-#'     active document, and an empty selection when it is not.
+#'   \item In RStudio, reads the served document by id on every tick, so its
+#'     buffer is broadcast while another tab is active and it is followed
+#'     through a rename or Save As. If the editor cannot read a document by
+#'     id, this is reported once and the buffer is read only while the
+#'     served document is active. With \code{auto_save = TRUE} the document
+#'     is also saved on every tick.
 #'   \item In Positron, which answers editor requests only while a console
-#'     command runs, the tick never calls the editor. A task callback reads
-#'     the editor at startup and after each console command, keeps the
-#'     selection (or an empty one when another document is active) for the
-#'     tick to broadcast, and optionally saves the file if it is the active
-#'     document and has unsaved changes.
-#'   \item In RStudio, notices when the document is renamed or saved under
-#'     another name, tells the instructor once, and stops auto-saving it.
+#'     command runs, the tick reads the active editor only while the
+#'     blocking loop of \code{\link{serve_file}} runs (see
+#'     \code{$set_blocking()}); otherwise it makes no editor calls and the
+#'     file is read from disk. While another document is active the last
+#'     buffer seen keeps being broadcast.
+#'   \item Broadcasts the editor selection when the served document is the
+#'     active one, and an empty selection when it is not.
 #'   \item Serves static assets (JavaScript, CSS, etc.) from the package
 #'     resources directory under \code{/web}.
 #' }
@@ -441,6 +473,9 @@ file_stream_server = function(host, port, file, file_id = NULL, interval = 1,
 #' This is a high level, user facing interface class that allows
 #' for the creation of a livecode server sharing a specific file.
 #' The interface also provides additional tools for sending messages.
+#' \code{\link{serve_file}} is a wrapper around \code{$new()}, which also
+#' sends the welcome message and, with \code{block = TRUE}, keeps running
+#' until the broadcast is interrupted or stopped.
 #'
 #' @export
 lc_server_iface = R6::R6Class(
@@ -450,6 +485,7 @@ lc_server_iface = R6::R6Class(
     file = NULL,
     file_id = NULL,
     auto_save = FALSE,
+    block = FALSE,
     editor = "none",
     ip = NULL,
     port = NULL,
@@ -468,8 +504,10 @@ lc_server_iface = R6::R6Class(
         private$server$stop()
     },
 
-    init_file = function(file, auto_save) {
+    init_file = function(file, auto_save, block) {
       editor = editor_backend()
+      auto_save = check_auto_save(auto_save, editor, call = NULL)
+      block = resolve_block(block, editor, call = NULL)
       ctx = NULL
 
       if (!is.null(file)) {
@@ -511,7 +549,8 @@ lc_server_iface = R6::R6Class(
 
       private$file = file
       private$file_id = ctx[["id"]]
-      private$auto_save = isTRUE(auto_save)
+      private$auto_save = auto_save
+      private$block = block
       private$editor = editor
     },
 
@@ -563,7 +602,109 @@ lc_server_iface = R6::R6Class(
     },
 
     init_editor_notes = function() {
-      editor_save_warnings(private$editor, private$auto_save)
+      editor_notes(private$editor, private$auto_save, private$block)
+    },
+
+    send_welcome = function() {
+      name = basename(self$path)
+      welcome_msg = c(
+        "## Welcome to `livecode`!",
+        "",
+        paste0("Serving `", name, "` at"),
+        "",
+        paste0(
+          "<div class='server_link'><a href='", self$url, "'>", self$url, "</a></div>"
+        )
+      )
+
+      self$send_msg(
+        text = welcome_msg, sticky = TRUE,
+        plain_text = paste0("Welcome to livecode! Following ", name, ".")
+      )
+    },
+
+    start_server = function() {
+      if (self$is_running()) {
+        cli::cli_alert_info("The server is already running at {.url {self$url}}.")
+        return(invisible(FALSE))
+      }
+
+      if (!is.null(private$server))
+        private$file = private$server$path()
+
+      private$server = tryCatch(
+        file_stream_server(
+          private$ip, private$port, private$file, private$file_id,
+          interval = private$interval, auto_save = private$auto_save,
+          editor = private$editor
+        ),
+        error = function(e) {
+          cli::cli_abort(
+            "Failed to start the server at {.url {self$url}}.",
+            parent = e
+          )
+        }
+      )
+
+      if (!is.null(private$sticky_msg))
+        private$server$set_sticky_msg(private$sticky_msg, announce = FALSE)
+
+      if (!is.null(private$tailcat))
+        private$attach_tailcat()
+
+      name = basename(private$file)
+      cli::cli_alert_success("Started sharing {.file {name}} at {.url {self$url}}.")
+
+      if (is_ip_private(private$ip)) {
+        cli::cli_alert_warning(paste(
+          "The current ip address ({.val {private$ip}}) for the server is private,",
+          "only users on the same local network are likely to be able to connect."
+        ))
+      }
+
+      if (!is_registered(self))
+        register_server(self)
+
+      invisible(TRUE)
+    },
+
+    # Runs the event loop in this console until the server stops or the
+    # call is interrupted. In Positron this keeps a console request active,
+    # which is what lets the tick read the editor.
+    block_loop = function() {
+      server = private$server
+      if (is.null(server) || !server$is_running())
+        return(invisible(self))
+
+      if (identical(private$editor, "positron"))
+        positron_blocking_note()
+
+      server$set_blocking(TRUE)
+      on.exit(server$set_blocking(FALSE), add = TRUE)
+
+      outcome = tryCatch(
+        {
+          while (server$is_running())
+            block_step()
+          NULL
+        },
+        interrupt = function(e) "interrupted",
+        error = function(e) e
+      )
+
+      if (!is.null(outcome)) {
+        suppressMessages(self$stop())
+        name = basename(self$path)
+        if (inherits(outcome, "error")) {
+          cli::cli_alert_danger(
+            "Stopped sharing {.file {name}} after an error: {conditionMessage(outcome)}"
+          )
+        } else {
+          cli::cli_alert_success("Stopped sharing {.file {name}} at {.url {self$url}}.")
+        }
+      }
+
+      invisible(self)
     }
   ),
   public = list(
@@ -575,16 +716,21 @@ lc_server_iface = R6::R6Class(
     #' @param ip ip of the server, defaults to the top result of `network_interfaces()`.
     #' @param port port of the server, defaults to a random value.
     #' @param interval page update interval in seconds.
-    #' @param auto_save should the broadcast file be auto saved each update
-    #'   tick (RStudio) or after each console command (Positron), see
+    #' @param auto_save should the served document be saved in RStudio at
+    #'   each update tick. Not supported in Positron, see
     #'   \code{\link{serve_file}}.
     #' @param open_browser should a browser session be opened.
     #' @param tailcat also broadcast over tailcat: `FALSE` (the default),
     #'   `TRUE` for a fresh address, or keys from [tailcat_keys()] for an
     #'   address posted ahead of time (see `$start_tailcat()`).
+    #' @param block should the call keep running, driving the broadcast, until
+    #'   it is interrupted or the server is stopped. `NULL` (the default)
+    #'   means `TRUE` in Positron and `FALSE` elsewhere, see
+    #'   \code{\link{serve_file}}. With `block = TRUE`, `$start()` and
+    #'   `$restart()` block too.
     initialize = function(
       file = NULL, ip = NULL, port = NULL, interval = 1,
-      auto_save = TRUE, open_browser = TRUE, tailcat = FALSE
+      auto_save = FALSE, open_browser = TRUE, tailcat = FALSE, block = NULL
     ) {
       if (!isFALSE(tailcat)) {
         tc_check_installed(tc_broadcast_packages(), "A tailcat broadcast", call = NULL)
@@ -592,12 +738,12 @@ lc_server_iface = R6::R6Class(
           tc_key_list(tailcat, call = NULL)
       }
 
-      private$init_file(file, auto_save)
+      private$init_file(file, auto_save, block)
       private$init_ip(ip)
       private$init_port(port)
       private$init_interval(interval)
 
-      self$start()
+      private$start_server()
 
       if (!isFALSE(tailcat)) {
         tryCatch(
@@ -610,9 +756,13 @@ lc_server_iface = R6::R6Class(
       }
 
       private$init_editor_notes()
+      private$send_welcome()
 
       if (open_browser)
-        later::later(function() self$open(), 1)
+        later::later(function() if (self$is_running()) self$open(), 1)
+
+      if (private$block)
+        private$block_loop()
     },
 
     #' @description
@@ -628,7 +778,7 @@ lc_server_iface = R6::R6Class(
     #' Class print method
     #' @param ... Ignored.
     print = function(...) {
-      name = basename(private$file)
+      name = basename(self$path)
       url = self$url
       status = if (self$is_running()) "running" else "stopped"
       cli::cli_text("{.strong livecode server:} {.file {name}} @ {.url {url}} ({status})")
@@ -714,46 +864,12 @@ lc_server_iface = R6::R6Class(
     },
 
     #' @description
-    #' Start the server
+    #' Start the server. With `block = TRUE` this call then keeps running
+    #' until it is interrupted or the server is stopped.
     start = function() {
-      if (self$is_running()) {
-        cli::cli_alert_info("The server is already running at {.url {self$url}}.")
-        return(invisible(self))
-      }
-
-      private$server = tryCatch(
-        file_stream_server(
-          private$ip, private$port, private$file, private$file_id,
-          interval = private$interval, auto_save = private$auto_save,
-          editor = private$editor
-        ),
-        error = function(e) {
-          cli::cli_abort(
-            "Failed to start the server at {.url {self$url}}.",
-            parent = e
-          )
-        }
-      )
-
-      if (!is.null(private$sticky_msg))
-        private$server$set_sticky_msg(private$sticky_msg, announce = FALSE)
-
-      if (!is.null(private$tailcat))
-        private$attach_tailcat()
-
-      name = basename(private$file)
-      cli::cli_alert_success("Started sharing {.file {name}} at {.url {self$url}}.")
-
-      if (is_ip_private(private$ip)) {
-        cli::cli_alert_warning(paste(
-          "The current ip address ({.val {private$ip}}) for the server is private,",
-          "only users on the same local network are likely to be able to connect."
-        ))
-      }
-
-      if (!is_registered(self))
-        register_server(self)
-
+      private$start_server()
+      if (private$block)
+        private$block_loop()
       invisible(self)
     },
 
@@ -792,7 +908,8 @@ lc_server_iface = R6::R6Class(
 
     #' @description
     #' Restart the server. A tailcat broadcast keeps running, with the same
-    #' address.
+    #' address. With `block = TRUE` this call then keeps running, as
+    #' `$start()` does.
     restart = function() {
       if (self$is_running()) {
         private$stop_server()
@@ -843,7 +960,7 @@ lc_server_iface = R6::R6Class(
         self$stop_tailcat()
 
       private$tailcat = tc_broadcast$new(
-        private$file, file_code_language(private$file), private$interval,
+        self$path, file_code_language(self$path), private$interval,
         key = keys, port = port, max_clients = max_clients
       )
       private$attach_tailcat()
@@ -891,7 +1008,7 @@ lc_server_iface = R6::R6Class(
 
     #' @field path The path of the file being served.
     path = function() {
-      private$file
+      if (is.null(private$server)) private$file else private$server$path()
     },
 
     #' @field tailcat_address The tailcat address of the broadcast, or
@@ -921,60 +1038,76 @@ lc_server_iface = R6::R6Class(
 #' @param port Port for the local server. Defaults to a random available port.
 #' @param interval Numeric. Update interval in seconds for refreshing content
 #'   and pushing updates to clients.
-#' @param auto_save Logical. Should the source file be automatically saved at
-#'   each update interval (RStudio) or each time code is run in the console
-#'   (Positron), see the section on editors.
+#' @param auto_save Logical. Should the served document also be saved at each
+#'   update interval. RStudio only and off by default, since the editor's
+#'   unsaved text is broadcast anyway; \code{TRUE} is an error in Positron.
+#'   See the section on editors.
 #' @param open_browser Logical. Should a browser session be opened automatically.
 #' @param tailcat Also broadcast over tailcat, so students anywhere can follow
 #'   with [follow()]: `FALSE` (the default), `TRUE` for a fresh address, or
 #'   keys from [tailcat_keys()] for an address posted ahead of time. Needs
 #'   the rtailcat package, see the section on tailcat below.
+#' @param block Logical or `NULL`. Should \code{serve_file()} keep running,
+#'   driving the broadcast from this console, until it is interrupted (Esc
+#'   or Ctrl-C) or the server is stopped. `NULL` (the default) means `TRUE`
+#'   in Positron, which needs it to read the editor, and `FALSE` elsewhere.
+#'   See the section on editors.
 #'
 #' @details
 #' The server is implemented using \pkg{httpuv} and maintains an open WebSocket
 #' connection to all clients. Updates are pushed at the specified \code{interval},
 #' including:
 #' \itemize{
-#'   \item Updated file contents
-#'   \item Cursor/selection position (RStudio; in Positron as of the last
-#'     code run in the console)
+#'   \item The text of the file, taken from the editor (unsaved edits
+#'     included) when it can be read and from the file on disk otherwise
+#'   \item The lines selected in the editor
 #'   \item Messages sent via \code{send_msg()}
 #' }
 #'
 #' @section Editors:
-#' In RStudio and Positron the selection in the editor is highlighted on the
-#' page while the served file is the active document, and the highlight is
-#' cleared when another document is active. The page always updates when the
-#' file is saved. The two IDEs differ in a few ways:
+#' In RStudio and Positron the page shows the editor's text of the served
+#' document, including edits that have not been saved, and highlights the
+#' lines selected in the editor while the served document is the active one;
+#' the highlight is cleared when another document is active. Outside an IDE
+#' the page shows the file on disk and updates whenever it is saved. The two
+#' IDEs differ in a few ways:
 #' \itemize{
-#'   \item RStudio is read at every update: the highlight follows the cursor
-#'     and, with \code{auto_save = TRUE}, the served document is saved
-#'     wherever it is open, so students see your edits as you type.
-#'   \item Positron answers editor requests only while a console command
-#'     runs, so \code{livecode} reads it each time code is run in the
-#'     console: the highlight shows the selection as of the last code run,
-#'     not cursor movement, and with \code{auto_save = TRUE} the file is
-#'     saved then, if it is the active document and has unsaved changes.
-#'     For continuous updates while typing, turn on Positron's auto save
-#'     (set \code{files.autoSave} to \code{"afterDelay"} with a short
-#'     \code{files.autoSaveDelay}). Positron's auto save skips format on
-#'     save but still applies \code{files.trimTrailingWhitespace} and
-#'     \code{files.insertFinalNewline} if they are on.
-#'   \item When \code{livecode} saves in Positron it skips format on save
-#'     and other save actions when its R kernel allows it; otherwise it
-#'     prints a note naming the \code{editor.formatOnSave} and
-#'     \code{files.trimTrailingWhitespace} settings, which it cannot read.
-#'     In RStudio a warning is printed when "Strip trailing horizontal
-#'     whitespace when saving" is on, globally or in the project.
-#'   \item In RStudio, renaming the document or saving it under another name
-#'     is reported once; \code{livecode} then keeps serving the original
-#'     file from disk and stops saving it. Positron cannot report this, so
-#'     the original file keeps being served without a notice.
+#'   \item RStudio is read at every update from the idle event loop, so
+#'     \code{serve_file()} returns straight away (\code{block = FALSE}). The
+#'     served document is read by its id, so its text keeps being broadcast
+#'     while another tab is active and it is followed through a rename or
+#'     Save As. If RStudio cannot read a document by id, this is reported
+#'     once and the text is read only while the served document is active.
+#'   \item Positron answers editor requests only while a console command is
+#'     running. So by default (\code{block = TRUE}) \code{serve_file()}
+#'     keeps running and drives the broadcast itself: the console it was
+#'     called from is dedicated to the broadcast until you interrupt it with
+#'     Esc or Ctrl-C, which stops the server, and you work in a second R
+#'     console session meanwhile. Positron exposes only the active editor,
+#'     so while another tab is active the page keeps the last text seen
+#'     and clears the highlight. Renames are not followed in Positron.
+#'   \item With \code{block = FALSE} in Positron, livecode makes no editor
+#'     calls after startup: the page shows the file on disk, with no
+#'     highlight. Turning on Positron's auto save (\code{files.autoSave})
+#'     keeps the file on disk close to what you type.
+#'   \item Saving is not needed for the broadcast. In RStudio,
+#'     \code{auto_save = TRUE} also saves the served document at every
+#'     update, and a warning is printed when "Strip trailing horizontal
+#'     whitespace when saving" is on, globally or in the project. In
+#'     Positron \code{auto_save = TRUE} is an error; use Positron's own
+#'     auto save setting instead.
 #' }
+#' While \code{serve_file()} blocks, its console is busy, so
+#' \code{$send_msg()} and the other methods of the server cannot be called
+#' from that console. Use \code{block = FALSE} if you need them (in Positron
+#' at the cost of reading the file from disk).
+#'
 #' The editor is detected automatically. Set
 #' \code{options(livecode.editor = "rstudio")}, \code{"positron"}, or
 #' \code{"none"} to override the detection, for example \code{"none"} to
-#' serve a file without involving the editor at all.
+#' serve a file without involving the editor at all. Blocking also works
+#' outside an IDE, for example from \command{Rscript}, and in RStudio when
+#' asked for with \code{block = TRUE}.
 #'
 #' The page highlights the file with a bundled copy of Prism, chosen by the
 #' file's extension: R, Quarto and R Markdown (\code{.qmd}, \code{.Rmd}),
@@ -1033,14 +1166,20 @@ lc_server_iface = R6::R6Class(
 #'   \item \code{$start_tailcat()}, \code{$stop_tailcat()}, and
 #'     \code{$tailcat_address} for the tailcat broadcast
 #' }
+#' With \code{block = TRUE} the object is returned once the broadcast has
+#' stopped.
 #'
 #' @examples
 #' \dontrun{
-#' srv = serve_file("script.R")
+#' # RStudio, or any R session with block = FALSE: returns straight away
+#' srv = serve_file("script.R", block = FALSE)
 #'
 #' srv$send_msg("Hello, everyone!", type = "success")
 #'
 #' srv$stop()
+#'
+#' # Positron: runs until interrupted with Esc or Ctrl-C
+#' serve_file("script.R")
 #' }
 #'
 #' @export
@@ -1048,29 +1187,15 @@ serve_file = function(file = NULL,
                       ip = NULL,
                       port = NULL,
                       interval = 1,
-                      auto_save = TRUE,
+                      auto_save = FALSE,
                       open_browser = TRUE,
-                      tailcat = FALSE) {
+                      tailcat = FALSE,
+                      block = NULL) {
   server = lc_server_iface$new(
     file = file, ip = ip, port = port,
     interval = interval,
     auto_save = auto_save, open_browser = open_browser,
-    tailcat = tailcat
-  )
-
-  welcome_msg = c(
-    "## Welcome to `livecode`!",
-    "",
-    paste0("Serving `", basename(server$path), "` at"),
-    "",
-    paste0(
-      "<div class='server_link'><a href='", server$url, "'>", server$url, "</a></div>"
-    )
-  )
-
-  server$send_msg(
-    text = welcome_msg, sticky = TRUE,
-    plain_text = paste0("Welcome to livecode! Following ", basename(server$path), ".")
+    tailcat = tailcat, block = block
   )
   invisible(server)
 }

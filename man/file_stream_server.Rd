@@ -22,13 +22,14 @@ server should listen.}
 
 \item{file}{Path to the file being broadcast.}
 
-\item{file_id}{Optional RStudio document id of the file, used to save it
-and to notice when it is renamed. Positron has no document ids.}
+\item{file_id}{Optional RStudio document id of the file, used to read its
+buffer while another tab is active, to save it, and to follow it through
+a rename. Positron has no document ids.}
 
 \item{interval}{Numeric update interval in seconds between broadcast ticks.}
 
-\item{auto_save}{Logical. Should the file be saved in the editor on each
-tick (in Positron, after each console command instead).}
+\item{auto_save}{Logical. Should the document be saved in RStudio on each
+tick. Ignored in Positron and outside an IDE.}
 
 \item{editor}{The editor backend, one of \code{"rstudio"},
 \code{"positron"}, or \code{"none"}. Detected by default, see
@@ -55,20 +56,25 @@ The server performs the following tasks:
 \itemize{
   \item Serves an HTML page that highlights the file with Prism in the
     language given by its extension (see \code{file_code_language()}).
-  \item Tracks the source file using \code{\link{file_cache}}.
-  \item Pushes updated file contents to clients when the file changes.
+  \item Broadcasts the editor's buffer of the served document, unsaved
+    edits included, when it can be read, and otherwise the file on disk,
+    tracked with \code{\link{file_cache}}. Content is sent only when it
+    differs from what was last broadcast.
   \item Pushes queued messages from the server message queue.
-  \item In RStudio, optionally saves the file on each update tick and
-    broadcasts the current editor selection when the served file is the
-    active document, and an empty selection when it is not.
+  \item In RStudio, reads the served document by id on every tick, so its
+    buffer is broadcast while another tab is active and it is followed
+    through a rename or Save As. If the editor cannot read a document by
+    id, this is reported once and the buffer is read only while the
+    served document is active. With \code{auto_save = TRUE} the document
+    is also saved on every tick.
   \item In Positron, which answers editor requests only while a console
-    command runs, the tick never calls the editor. A task callback reads
-    the editor at startup and after each console command, keeps the
-    selection (or an empty one when another document is active) for the
-    tick to broadcast, and optionally saves the file if it is the active
-    document and has unsaved changes.
-  \item In RStudio, notices when the document is renamed or saved under
-    another name, tells the instructor once, and stops auto-saving it.
+    command runs, the tick reads the active editor only while the
+    blocking loop of \code{\link{serve_file}} runs (see
+    \code{$set_blocking()}); otherwise it makes no editor calls and the
+    file is read from disk. While another document is active the last
+    buffer seen keeps being broadcast.
+  \item Broadcasts the editor selection when the served document is the
+    active one, and an empty selection when it is not.
   \item Serves static assets (JavaScript, CSS, etc.) from the package
     resources directory under \code{/web}.
 }

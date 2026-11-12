@@ -76,22 +76,34 @@ local_editor = function(backend, env = parent.frame()) {
   withr::defer(editor_reset(), envir = env)
 }
 
-# A fake source editor: the context it reports and a log of the calls made.
+# A fake source editor: the active document it reports, documents that can
+# be read by id (a function there stands for a failing call), and a log of
+# the calls made.
 fake_editor = function(path = NULL, id = NULL, contents = NULL, selection = list(), env = parent.frame()) {
   ed = new.env()
   ed$ctx = list(id = id, path = path, contents = contents, selection = selection)
+  ed$docs = list()
   ed$calls = list()
   ed$reads = 0
+  ed$id_reads = 0
   log = function(...) ed$calls[[length(ed$calls) + 1]] = list(...)
 
   testthat::local_mocked_bindings(
-    rs_context = function() {
-      ed$reads = ed$reads + 1
-      ed$ctx
+    rs_context = function(id = NULL) {
+      if (is.null(id)) {
+        ed$reads = ed$reads + 1
+        return(ed$ctx)
+      }
+      ed$id_reads = ed$id_reads + 1
+      doc = ed$docs[[id]]
+      if (is.function(doc))
+        return(doc())
+      if (!is.null(doc))
+        return(doc)
+      if (identical(ed$ctx$id, id)) ed$ctx else NULL
     },
     rs_save = function(id = NULL) log("save", id),
     rs_navigate = function(file) log("navigate", file),
-    ps_execute_command = function(command) log("command", command),
     .env = env
   )
   ed
@@ -105,15 +117,32 @@ sel_rows = function(first, last) {
   list(list(range = list(start = c(row = first, column = 1), end = c(row = last, column = 2)), text = ""))
 }
 
-local_lc_server = function(file, editor, auto_save = TRUE, file_id = NULL, env = parent.frame()) {
+local_lc_server = function(file, editor, auto_save = FALSE, file_id = NULL, interval = 10,
+                           port = httpuv::randomPort(host = "127.0.0.1"), env = parent.frame()) {
   srv = file_stream_server(
-    "127.0.0.1", httpuv::randomPort(host = "127.0.0.1"), file, file_id = file_id,
-    interval = 10, auto_save = auto_save, editor = editor
+    "127.0.0.1", port, file, file_id = file_id,
+    interval = interval, auto_save = auto_save, editor = editor
   )
   withr::defer(srv$stop(), envir = env)
   srv
 }
 
-has_positron_callback = function() {
-  positron_callback_name %in% getTaskCallbackNames()
+# Collects the frames a server emits, as the tailcat broadcast receives them.
+frame_log = function(srv) {
+  log = new.env()
+  log$frames = list()
+  srv$add_sink("test", function(frame) log$frames[[length(log$frames) + 1]] = frame)
+  log
+}
+
+# Fails a blocking call that has not returned after `seconds`, instead of
+# letting it hang the test run.
+with_time_limit = function(seconds, code) {
+  setTimeLimit(elapsed = seconds, transient = TRUE)
+  on.exit(setTimeLimit(elapsed = Inf), add = TRUE)
+  force(code)
+}
+
+interrupt_condition = function() {
+  structure(class = c("interrupt", "condition"), list(message = "", call = NULL))
 }

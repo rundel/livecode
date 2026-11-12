@@ -64,7 +64,6 @@ stop_all = function() {
   for (follower in .globals$followers) {
     follower$stop()
   }
-  positron_unwatch_all()
   invisible()
 }
 

@@ -5,45 +5,22 @@
 
 # Thin wrappers around the IDE, kept separate so tests can mock them.
 rs_available = function() rstudioapi::isAvailable()
-rs_context = function() rstudioapi::getSourceEditorContext()
+rs_context = function(id = NULL) rstudioapi::getSourceEditorContext(id)
 rs_save = function(id = NULL) rstudioapi::documentSave(id)
 rs_navigate = function(file) rstudioapi::navigateToFile(file)
-rs_document_path = function(id) rstudioapi::documentPath(id)
 rs_read_pref = function(name, default) rstudioapi::readRStudioPreference(name, default)
 rs_active_project = function() rstudioapi::getActiveProject()
 platform_gui = function() .Platform$GUI
 positron_env = function() Sys.getenv("POSITRON")
 
-# rstudioapi::executeCommand() cannot reach this: Positron's shim only maps a
-# fixed list of RStudio command names and reports any other as missing. The
-# ark function the shim forwards to is used directly instead, when present.
-ps_command_fun = function() {
-  env = tryCatch(as.environment("tools:positron"), error = function(e) NULL)
-  if (is.null(env))
-    return(NULL)
-  get0(".ps.ui.executeCommand", envir = env, mode = "function", inherits = FALSE)
-}
-
-ps_execute_command = function(command) {
-  f = ps_command_fun()
-  if (is.null(f))
-    cli::cli_abort("Positron command execution is not available.")
-  f(command)
-}
-
 editor_state = new.env(parent = emptyenv())
 
 editor_reset = function() {
   editor_state$errors = list()
-  editor_state$save_unformatted = NA
-  editor_state$format_note = FALSE
   invisible()
 }
 
 editor_reset()
-
-editor_state$watched = list()
-editor_state$callback = FALSE
 
 editor_backends = c("rstudio", "positron", "none")
 
@@ -71,6 +48,34 @@ editor_backend = function() {
     "positron"
   else
     "none"
+}
+
+# Positron answers editor requests only while a console command runs, so by
+# default serve_file() keeps the console busy there (see block_loop()).
+editor_block_default = function(backend = editor_backend()) {
+  identical(backend, "positron")
+}
+
+resolve_block = function(block, backend = editor_backend(), call = parent.frame()) {
+  if (is.null(block))
+    return(editor_block_default(backend))
+  if (!is.logical(block) || length(block) != 1 || is.na(block))
+    cli::cli_abort("{.arg block} must be {.code TRUE}, {.code FALSE}, or {.code NULL}.", call = call)
+  block
+}
+
+check_auto_save = function(auto_save, backend = editor_backend(), call = parent.frame()) {
+  if (!is.logical(auto_save) || length(auto_save) != 1 || is.na(auto_save))
+    cli::cli_abort("{.arg auto_save} must be {.code TRUE} or {.code FALSE}.", call = call)
+
+  if (auto_save && identical(backend, "positron")) {
+    cli::cli_abort(c(
+      "{.code auto_save = TRUE} is not supported in Positron.",
+      "i" = "livecode broadcasts the editor's unsaved text, so the file does not need saving.",
+      "i" = "To save as you type, turn on Positron's own auto save ({.field files.autoSave})."
+    ), call = call)
+  }
+  auto_save
 }
 
 # Runs an editor call, reporting a failure once until the call succeeds
@@ -119,13 +124,7 @@ same_path = function(a, b) {
   is_saved_path(a) && is_saved_path(b) && identical(normalize_path(a), normalize_path(b))
 }
 
-# Returns NULL when there is no IDE or no open source editor, otherwise a
-# list whose path is NULL for an untitled document. Positron gives no id.
-editor_context = function(backend = editor_backend()) {
-  if (identical(backend, "none"))
-    return(NULL)
-
-  ctx = editor_try("Reading the editor", rs_context)
+as_editor_context = function(ctx) {
   if (!is.list(ctx))
     return(NULL)
 
@@ -145,20 +144,95 @@ editor_context = function(backend = editor_backend()) {
   )
 }
 
+# The active document. Returns NULL when there is no IDE or no open source
+# editor, otherwise a list whose path is NULL for an untitled document.
+# Positron gives no id.
+editor_context = function(backend = editor_backend()) {
+  if (identical(backend, "none"))
+    return(NULL)
+
+  as_editor_context(editor_try("Reading the editor", rs_context))
+}
+
+# One RStudio document by id, whether or not it is the active one. Returns
+# list(ctx, error): error explains a NULL ctx.
+editor_document = function(id, backend = editor_backend()) {
+  if (!identical(backend, "rstudio") || is.null(id))
+    return(list(ctx = NULL, error = "no document id"))
+
+  res = tryCatch(
+    list(ctx = as_editor_context(rs_context(id)), error = NULL),
+    error = function(e) list(ctx = NULL, error = conditionMessage(e))
+  )
+  ctx = res[["ctx"]]
+  if (is.null(res[["error"]]) && is.null(ctx))
+    res[["error"]] = "the editor returned no document"
+  # An RStudio without the id argument answers with the active document,
+  # which must not be taken for the served one.
+  if (!is.null(ctx) && !identical(ctx[["id"]], id))
+    res = list(ctx = NULL, error = "the editor answered with another document")
+  res
+}
+
+# Whether ctx, the active document, is the served one: by id when both are
+# known, as RStudio keeps the id through a rename, else by path.
+editor_is_served = function(file, id, ctx) {
+  if (is.null(ctx))
+    return(FALSE)
+  if (!is.null(id) && !is.null(ctx[["id"]]))
+    return(identical(ctx[["id"]], id))
+  same_path(ctx[["path"]], file)
+}
+
 editor_is_active = function(file, ctx) {
   !is.null(ctx) && same_path(ctx[["path"]], file)
 }
 
 # NULL means the selection is unknown (no IDE), "" that the served file is
 # not the active document, so clients clear the highlight.
-editor_selection = function(file, ctx, backend = editor_backend()) {
+editor_selection = function(file, ctx, backend = editor_backend(), id = NULL) {
   if (identical(backend, "none"))
     return(NULL)
 
-  if (!editor_is_active(file, ctx))
+  if (!editor_is_served(file, id, ctx))
     return("")
 
   extract_line_nums(ctx[["selection"]])
+}
+
+editor_text = function(contents) {
+  if (!is.character(contents) || anyNA(contents))
+    return(NULL)
+  paste(enc2utf8(contents), collapse = "\n")
+}
+
+# Reads the served document's buffer and the selection. RStudio reads the
+# document by id, so it is read while another tab is active; otherwise, and
+# in Positron, the buffer is read only while the document is active.
+# Returns NULL without an IDE, else list(contents, selection, path,
+# by_id_error), where contents is NULL when the buffer could not be read.
+editor_read = function(file, id = NULL, backend = editor_backend(), by_id = FALSE) {
+  if (identical(backend, "none"))
+    return(NULL)
+
+  doc = NULL
+  by_id_error = NULL
+  if (by_id && identical(backend, "rstudio")) {
+    res = editor_document(id, backend)
+    doc = res[["ctx"]]
+    by_id_error = res[["error"]]
+  }
+
+  active = editor_context(backend)
+  if (is.null(doc) && editor_is_served(file, id, active))
+    doc = active
+
+  list(
+    contents = editor_text(doc[["contents"]]),
+    selection = editor_selection(file, active, backend, id),
+    path = doc[["path"]],
+    by_id_error = by_id_error
+  )
 }
 
 # Opens file in the editor and waits until it is the active document, so
@@ -191,172 +265,40 @@ editor_open = function(file, backend = editor_backend(), timeout = 3, poll = 0.1
   ))
 }
 
-# Saves the served file. Returns TRUE if a save was requested, FALSE if it
-# was skipped or failed; never errors.
-editor_save = function(file, id, ctx, backend = editor_backend()) {
-  switch(
-    backend,
-    rstudio = {
-      if (is.null(id))
-        return(FALSE)
-      isTRUE(editor_try("Auto-save", function() {
-        rs_save(id)
-        TRUE
-      }, default = FALSE))
-    },
-    positron = positron_save(file, ctx),
-    FALSE
-  )
-}
-
-# Positron can only save the active editor, so the served file is saved
-# only while it is the active document, and only when the buffer differs
-# from the file (save without formatting writes even a clean buffer).
-# Positron answers this only while a console command runs, so it is called
-# from the task callback below, never from the tick.
-positron_save = function(file, ctx) {
-  if (!editor_is_active(file, ctx))
+# Saves the served RStudio document by id. Returns TRUE if a save was
+# requested, FALSE if it was skipped or failed; never errors.
+editor_save = function(id, backend = editor_backend()) {
+  if (!identical(backend, "rstudio") || is.null(id))
     return(FALSE)
-
-  if (buffer_matches_file(file, ctx[["contents"]]))
-    return(FALSE)
-
-  if (!isFALSE(editor_state$save_unformatted)) {
-    ok = tryCatch(
-      {
-        ps_execute_command("workbench.action.files.saveWithoutFormatting")
-        TRUE
-      },
-      error = function(e) FALSE
-    )
-    editor_state$save_unformatted = ok
-    if (ok)
-      return(TRUE)
-    positron_format_note()
-  }
 
   isTRUE(editor_try("Auto-save", function() {
-    rs_save(NULL)
+    rs_save(id)
     TRUE
   }, default = FALSE))
 }
 
-buffer_matches_file = function(file, contents) {
-  if (!is.character(contents))
-    return(FALSE)
-
-  tryCatch(
-    {
-      size = file.size(file)
-      disk = if (size == 0) "" else readChar(file, size, useBytes = TRUE)
-      Encoding(disk) = "UTF-8"
-      disk = gsub("\r\n", "\n", disk, fixed = TRUE)
-      identical(enc2utf8(paste(contents, collapse = "\n")), disk)
-    },
-    error = function(e) FALSE,
-    warning = function(w) FALSE
-  )
-}
-
-# The path RStudio has for the document with this id, or NULL if unknown.
-editor_document_path = function(id, backend = editor_backend()) {
-  if (!identical(backend, "rstudio") || is.null(id))
-    return(NULL)
-
-  path = tryCatch(rs_document_path(id), error = function(e) NULL)
-  if (is_saved_path(path)) path else NULL
-}
-
-# Positron answers editor requests only while a console command is running,
-# not from the idle event loop where the tick runs. So for Positron servers
-# one task callback, run after each console command, reads the editor and
-# hands the context to every server, which keeps it for the tick.
-positron_callback_name = "livecode-positron"
-
-positron_watch = function(server) {
-  if (!any(vapply(editor_state$watched, identical, logical(1), y = server)))
-    editor_state$watched = c(editor_state$watched, list(server))
-
-  registered = positron_callback_name %in% getTaskCallbackNames()
-  if (!isTRUE(editor_state$callback) || !registered) {
-    # A callback left by an earlier load of the package would read that
-    # copy's servers, so it is replaced rather than kept.
-    if (registered)
-      removeTaskCallback(positron_callback_name)
-    addTaskCallback(function(...) positron_task_callback(...), name = positron_callback_name)
-    editor_state$callback = TRUE
-  }
+# Startup notes about how the editor is followed.
+editor_notes = function(backend = editor_backend(), auto_save = FALSE, block = FALSE) {
+  if (identical(backend, "rstudio") && auto_save)
+    rstudio_whitespace_warning()
+  if (identical(backend, "positron") && !block)
+    positron_nonblocking_note()
   invisible()
 }
 
-positron_unwatch = function(server) {
-  keep = !vapply(editor_state$watched, identical, logical(1), y = server)
-  editor_state$watched = editor_state$watched[keep]
-  if (length(editor_state$watched) == 0)
-    positron_unwatch_all()
-  invisible()
-}
-
-positron_unwatch_all = function() {
-  editor_state$watched = list()
-  if (positron_callback_name %in% getTaskCallbackNames())
-    removeTaskCallback(positron_callback_name)
-  editor_state$callback = FALSE
-  invisible()
-}
-
-# R drops a task callback that errors or returns anything but TRUE.
-positron_task_callback = function(...) {
-  tryCatch(
-    editor_try("Following the editor", positron_refresh),
-    error = function(e) NULL,
-    interrupt = function(e) NULL
-  )
-  TRUE
-}
-
-positron_refresh = function() {
-  servers = Filter(function(srv) srv$is_running(), editor_state$watched)
-  if (length(servers) == 0)
-    return(invisible(FALSE))
-
-  ctx = editor_context("positron")
-  for (srv in servers)
-    srv$editor_refresh(ctx)
-  invisible(TRUE)
-}
-
-# Startup notes about how the editor saves the file and what can rewrite it.
-editor_save_warnings = function(backend = editor_backend(), auto_save = TRUE) {
-  switch(
-    backend,
-    rstudio = if (auto_save) rstudio_whitespace_warning(),
-    positron = {
-      positron_note(auto_save)
-      if (auto_save) {
-        if (is.null(ps_command_fun()))
-          editor_state$save_unformatted = FALSE
-        if (isFALSE(editor_state$save_unformatted))
-          positron_format_note()
-      }
-    },
-    NULL
-  )
-  invisible()
-}
-
-positron_note = function(auto_save) {
-  run = if (auto_save)
-    "livecode saves the file and updates the highlighted lines each time code is run in the console."
-  else
-    "livecode updates the highlighted lines each time code is run in the console."
-
+positron_blocking_note = function() {
   cli::cli_alert_info(paste(
-    "In Positron the page updates whenever the file is saved, and", run,
-    "For continuous updates while you type, turn on Positron's auto save: set",
-    "{.field files.autoSave} to {.val afterDelay} with a short {.field files.autoSaveDelay},",
-    "such as {.val {500}} milliseconds. Positron's auto save skips format on save but still applies",
-    "{.field files.trimTrailingWhitespace} and {.field files.insertFinalNewline} if they are on."
+    "This console now runs the broadcast until you interrupt it (Esc or Ctrl-C).",
+    "Do your work in a second R console session."
+  ))
+  invisible()
+}
+
+positron_nonblocking_note = function() {
+  cli::cli_alert_info(paste(
+    "With {.code block = FALSE} livecode cannot read Positron's editor: the page shows the file",
+    "as saved on disk and does not highlight the selection. Use the default {.code block = TRUE},",
+    "or turn on Positron's auto save ({.field files.autoSave}) so the file on disk follows your typing."
   ))
   invisible()
 }
@@ -398,16 +340,7 @@ rproj_strips_whitespace = function(project) {
   any(grepl("^StripTrailingWhitespace:\\s*Yes\\s*$", lines))
 }
 
-# Positron's settings cannot be read from R, so name the ones that matter.
-positron_format_note = function() {
-  if (isTRUE(editor_state$format_note))
-    return(invisible())
-  editor_state$format_note = TRUE
-
-  cli::cli_alert_warning(paste(
-    "livecode cannot save without formatting in this Positron session, so",
-    "auto-save runs your save actions. If {.field editor.formatOnSave} or",
-    "{.field files.trimTrailingWhitespace} is on, turn it off while you broadcast."
-  ))
-  invisible()
+# One step of the blocking loop, kept separate so tests can mock it.
+block_step = function(timeout = 0.1) {
+  later::run_now(timeoutSecs = timeout)
 }

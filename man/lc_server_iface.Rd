@@ -7,6 +7,9 @@
 This is a high level, user facing interface class that allows
 for the creation of a livecode server sharing a specific file.
 The interface also provides additional tools for sending messages.
+\code{\link{serve_file}} is a wrapper around \code{$new()}, which also
+sends the welcome message and, with \code{block = TRUE}, keeps running
+until the broadcast is interrupted or stopped.
 }
 \section{Active bindings}{
   \if{html}{\out{<div class="r6-active-bindings">}}
@@ -48,9 +51,10 @@ The interface also provides additional tools for sending messages.
   ip = NULL,
   port = NULL,
   interval = 1,
-  auto_save = TRUE,
+  auto_save = FALSE,
   open_browser = TRUE,
-  tailcat = FALSE
+  tailcat = FALSE,
+  block = NULL
 )}
     \if{html}{\out{</div>}}
   }
@@ -62,13 +66,18 @@ in RStudio or Positron.}
       \item{\code{ip}}{ip of the server, defaults to the top result of `network_interfaces()`.}
       \item{\code{port}}{port of the server, defaults to a random value.}
       \item{\code{interval}}{page update interval in seconds.}
-      \item{\code{auto_save}}{should the broadcast file be auto saved each update
-tick (RStudio) or after each console command (Positron), see
+      \item{\code{auto_save}}{should the served document be saved in RStudio at
+each update tick. Not supported in Positron, see
 \code{\link{serve_file}}.}
       \item{\code{open_browser}}{should a browser session be opened.}
       \item{\code{tailcat}}{also broadcast over tailcat: `FALSE` (the default),
 `TRUE` for a fresh address, or keys from [tailcat_keys()] for an
 address posted ahead of time (see `$start_tailcat()`).}
+      \item{\code{block}}{should the call keep running, driving the broadcast, until
+it is interrupted or the server is stopped. `NULL` (the default)
+means `TRUE` in Positron and `FALSE` elsewhere, see
+\code{\link{serve_file}}. With `block = TRUE`, `$start()` and
+`$restart()` block too.}
     }
     \if{html}{\out{</div>}}
   }
@@ -168,7 +177,8 @@ written, before any markdown processing.}
 \if{html}{\out{<a id="method-LiveCodeServer_Interface-start"></a>}}
 \if{latex}{\out{\hypertarget{method-LiveCodeServer_Interface-start}{}}}
 \subsection{\code{LiveCodeServer_Interface$start()}}{
-  Start the server
+  Start the server. With `block = TRUE` this call then keeps running
+until it is interrupted or the server is stopped.
   \subsection{Usage}{
     \if{html}{\out{<div class="r">}}
     \preformatted{LiveCodeServer_Interface$start()}
@@ -200,7 +210,8 @@ written, before any markdown processing.}
 \if{latex}{\out{\hypertarget{method-LiveCodeServer_Interface-restart}{}}}
 \subsection{\code{LiveCodeServer_Interface$restart()}}{
   Restart the server. A tailcat broadcast keeps running, with the same
-address.
+address. With `block = TRUE` this call then keeps running, as
+`$start()` does.
   \subsection{Usage}{
     \if{html}{\out{<div class="r">}}
     \preformatted{LiveCodeServer_Interface$restart()}

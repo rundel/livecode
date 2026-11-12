@@ -9,9 +9,10 @@ serve_file(
   ip = NULL,
   port = NULL,
   interval = 1,
-  auto_save = TRUE,
+  auto_save = FALSE,
   open_browser = TRUE,
-  tailcat = FALSE
+  tailcat = FALSE,
+  block = NULL
 )
 }
 \arguments{
@@ -28,9 +29,10 @@ network interface (see \code{network_interfaces()}).}
 \item{interval}{Numeric. Update interval in seconds for refreshing content
 and pushing updates to clients.}
 
-\item{auto_save}{Logical. Should the source file be automatically saved at
-each update interval (RStudio) or each time code is run in the console
-(Positron), see the section on editors.}
+\item{auto_save}{Logical. Should the served document also be saved at each
+update interval. RStudio only and off by default, since the editor's
+unsaved text is broadcast anyway; \code{TRUE} is an error in Positron.
+See the section on editors.}
 
 \item{open_browser}{Logical. Should a browser session be opened automatically.}
 
@@ -38,6 +40,12 @@ each update interval (RStudio) or each time code is run in the console
 with [follow()]: `FALSE` (the default), `TRUE` for a fresh address, or
 keys from [tailcat_keys()] for an address posted ahead of time. Needs
 the rtailcat package, see the section on tailcat below.}
+
+\item{block}{Logical or `NULL`. Should \code{serve_file()} keep running,
+driving the broadcast from this console, until it is interrupted (Esc
+or Ctrl-C) or the server is stopped. `NULL` (the default) means `TRUE`
+in Positron, which needs it to read the editor, and `FALSE` elsewhere.
+See the section on editors.}
 }
 \value{
 An invisible \code{LiveCodeServer_Interface} R6 object representing the running
@@ -49,6 +57,8 @@ server. This object provides methods such as:
   \item \code{$start_tailcat()}, \code{$stop_tailcat()}, and
     \code{$tailcat_address} for the tailcat broadcast
 }
+With \code{block = TRUE} the object is returned once the broadcast has
+stopped.
 }
 \description{
 Starts a local \code{livecode} server that streams a syntax-highlighted
@@ -60,47 +70,57 @@ The server is implemented using \pkg{httpuv} and maintains an open WebSocket
 connection to all clients. Updates are pushed at the specified \code{interval},
 including:
 \itemize{
-  \item Updated file contents
-  \item Cursor/selection position (RStudio; in Positron as of the last
-    code run in the console)
+  \item The text of the file, taken from the editor (unsaved edits
+    included) when it can be read and from the file on disk otherwise
+  \item The lines selected in the editor
   \item Messages sent via \code{send_msg()}
 }
 }
 \section{Editors}{
 
-In RStudio and Positron the selection in the editor is highlighted on the
-page while the served file is the active document, and the highlight is
-cleared when another document is active. The page always updates when the
-file is saved. The two IDEs differ in a few ways:
+In RStudio and Positron the page shows the editor's text of the served
+document, including edits that have not been saved, and highlights the
+lines selected in the editor while the served document is the active one;
+the highlight is cleared when another document is active. Outside an IDE
+the page shows the file on disk and updates whenever it is saved. The two
+IDEs differ in a few ways:
 \itemize{
-  \item RStudio is read at every update: the highlight follows the cursor
-    and, with \code{auto_save = TRUE}, the served document is saved
-    wherever it is open, so students see your edits as you type.
-  \item Positron answers editor requests only while a console command
-    runs, so \code{livecode} reads it each time code is run in the
-    console: the highlight shows the selection as of the last code run,
-    not cursor movement, and with \code{auto_save = TRUE} the file is
-    saved then, if it is the active document and has unsaved changes.
-    For continuous updates while typing, turn on Positron's auto save
-    (set \code{files.autoSave} to \code{"afterDelay"} with a short
-    \code{files.autoSaveDelay}). Positron's auto save skips format on
-    save but still applies \code{files.trimTrailingWhitespace} and
-    \code{files.insertFinalNewline} if they are on.
-  \item When \code{livecode} saves in Positron it skips format on save
-    and other save actions when its R kernel allows it; otherwise it
-    prints a note naming the \code{editor.formatOnSave} and
-    \code{files.trimTrailingWhitespace} settings, which it cannot read.
-    In RStudio a warning is printed when "Strip trailing horizontal
-    whitespace when saving" is on, globally or in the project.
-  \item In RStudio, renaming the document or saving it under another name
-    is reported once; \code{livecode} then keeps serving the original
-    file from disk and stops saving it. Positron cannot report this, so
-    the original file keeps being served without a notice.
+  \item RStudio is read at every update from the idle event loop, so
+    \code{serve_file()} returns straight away (\code{block = FALSE}). The
+    served document is read by its id, so its text keeps being broadcast
+    while another tab is active and it is followed through a rename or
+    Save As. If RStudio cannot read a document by id, this is reported
+    once and the text is read only while the served document is active.
+  \item Positron answers editor requests only while a console command is
+    running. So by default (\code{block = TRUE}) \code{serve_file()}
+    keeps running and drives the broadcast itself: the console it was
+    called from is dedicated to the broadcast until you interrupt it with
+    Esc or Ctrl-C, which stops the server, and you work in a second R
+    console session meanwhile. Positron exposes only the active editor,
+    so while another tab is active the page keeps the last text seen
+    and clears the highlight. Renames are not followed in Positron.
+  \item With \code{block = FALSE} in Positron, livecode makes no editor
+    calls after startup: the page shows the file on disk, with no
+    highlight. Turning on Positron's auto save (\code{files.autoSave})
+    keeps the file on disk close to what you type.
+  \item Saving is not needed for the broadcast. In RStudio,
+    \code{auto_save = TRUE} also saves the served document at every
+    update, and a warning is printed when "Strip trailing horizontal
+    whitespace when saving" is on, globally or in the project. In
+    Positron \code{auto_save = TRUE} is an error; use Positron's own
+    auto save setting instead.
 }
+While \code{serve_file()} blocks, its console is busy, so
+\code{$send_msg()} and the other methods of the server cannot be called
+from that console. Use \code{block = FALSE} if you need them (in Positron
+at the cost of reading the file from disk).
+
 The editor is detected automatically. Set
 \code{options(livecode.editor = "rstudio")}, \code{"positron"}, or
 \code{"none"} to override the detection, for example \code{"none"} to
-serve a file without involving the editor at all.
+serve a file without involving the editor at all. Blocking also works
+outside an IDE, for example from \command{Rscript}, and in RStudio when
+asked for with \code{block = TRUE}.
 
 The page highlights the file with a bundled copy of Prism, chosen by the
 file's extension: R, Quarto and R Markdown (\code{.qmd}, \code{.Rmd}),
@@ -154,11 +174,15 @@ Practical points:
 
 \examples{
 \dontrun{
-srv = serve_file("script.R")
+# RStudio, or any R session with block = FALSE: returns straight away
+srv = serve_file("script.R", block = FALSE)
 
 srv$send_msg("Hello, everyone!", type = "success")
 
 srv$stop()
+
+# Positron: runs until interrupted with Esc or Ctrl-C
+serve_file("script.R")
 }
 
 }

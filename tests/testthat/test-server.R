@@ -96,20 +96,24 @@ test_that("the tick survives a deleted file and keeps running", {
 })
 
 test_that("tick errors are reported once and the loop keeps going", {
-  local_mocked_bindings(editor_selection = function(...) stop("boom"))
   f = local_test_file("x = 1")
-  srv = local_server(f)
+  local_editor("rstudio")
+  ed = fake_editor(path = f, id = "ID1", contents = c("x = 1", ""))
+  srv = local_lc_server(f, "rstudio", file_id = "ID1", interval = 0.1)
+  log = frame_log(srv)
 
+  local_mocked_bindings(editor_read = function(...) stop("boom"))
   msgs = capture_messages(pump(1))
   expect_equal(sum(grepl("boom", msgs)), 1)
   expect_true(srv$is_running())
 
-  local_mocked_bindings(editor_selection = function(...) NULL)
   touch_write(f, "x = 4")
-  client = ws_client(srv$url)
-  expect_equal(client$frames[[1]]$content %in% c("x = 1\n", "x = 4\n"), TRUE)
-  pump(3, until = function() "x = 4\n" %in% contents(client))
-  expect_true("x = 4\n" %in% contents(client))
+  pump(3, until = function() "x = 4\n" %in% unlist(lapply(log$frames, `[[`, "content")))
+  expect_true("x = 4\n" %in% unlist(lapply(log$frames, `[[`, "content")))
+
+  local_mocked_bindings(editor_read = function(...) list(contents = "x = 5", selection = "", path = f))
+  pump(3, until = function() "x = 5" %in% unlist(lapply(log$frames, `[[`, "content")))
+  expect_true("x = 5" %in% unlist(lapply(log$frames, `[[`, "content")))
 })
 
 test_that("servers are registered, listed, and stopped by stop_all", {
