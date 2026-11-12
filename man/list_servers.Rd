@@ -24,7 +24,7 @@ sessions.
 \examples{
 \dontrun{
 # Start a server
-srv <- serve_file("script.R")
+srv = serve_file("script.R")
 
 # View active servers
 list_servers()

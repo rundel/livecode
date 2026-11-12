@@ -1,11 +1,6 @@
-`%||%` <- function(x, y) {
-  if (is.null(x) || length(x) <= 0) y else x
-}
-
-is_rstudio = function () {
+is_rstudio = function() {
   requireNamespace("rstudioapi", quietly = TRUE) && rstudioapi::isAvailable()
 }
-
 
 using_project = function() {
   if (is_rstudio())
@@ -14,15 +9,8 @@ using_project = function() {
     FALSE
 }
 
-
-
+# The RStudio viewer sandboxes websockets, so always use the system browser.
 get_browser = function() {
-  #if (is_rstudio())
-  #  rstudioapi::viewer
-  #else
-  #  getOption("browser")
-
-  # Use system browser until sandboxing is fixed
   getOption("browser")
 }
 
@@ -37,24 +25,20 @@ get_template = function(name) {
   file = pkg_resource("templates", paste0(name, ".html"))
 
   if (file == "")
-    usethis::ui_stop("Template {usethis::ui_value(name)} does not exist.")
+    cli::cli_abort("Template {.val {name}} does not exist.")
 
   file
 }
 
-is_error = function(obj) {
-  inherits(obj, "try-error")
+html_escape = function(x) {
+  x = gsub("&", "&amp;", x, fixed = TRUE)
+  x = gsub("<", "&lt;", x, fixed = TRUE)
+  x = gsub(">", "&gt;", x, fixed = TRUE)
+  x = gsub("\"", "&quot;", x, fixed = TRUE)
+  gsub("'", "&#39;", x, fixed = TRUE)
 }
 
-port_available = function(host, port) {
-  ll = httpuv:::logLevel("OFF")
-  s = try({httpuv::startServer(host, port, list())}, silent = TRUE)
-  httpuv:::logLevel(ll)
-
-  if (is_error(s)) {
-    FALSE
-  } else {
-    httpuv::stopServer(s)
-    TRUE
-  }
+cli_escape = function(x) {
+  x = gsub("{", "{{", x, fixed = TRUE)
+  gsub("}", "}}", x, fixed = TRUE)
 }

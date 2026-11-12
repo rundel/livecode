@@ -1,4 +1,4 @@
-noty_msg <- R6::R6Class(
+noty_msg = R6::R6Class(
   "noty_msg",
   public = list(
     initialize = function(
@@ -27,14 +27,13 @@ noty_msg <- R6::R6Class(
       )
     },
     print = function(...) {
-      usethis::ui_line(
-        crayon::bold("Noty Message: "),
-        usethis::ui_value(private$text)
-      )
-      purrr::walk2(
-        names(private$args), private$args,
-        ~usethis:::kv_line(.x, .y)
-      )
+      text = private$text
+      cli::cli_text("{.strong Noty Message:} {.val {text}}")
+      args = vapply(private$args, function(x) paste(format(x), collapse = ", "), character(1))
+      args = cli_escape(args)
+      names(args) = cli_escape(names(private$args))
+      cli::cli_dl(args)
+      invisible(self)
     },
     get_msg = function() {
       c(
@@ -49,9 +48,5 @@ noty_msg <- R6::R6Class(
   private = list(
     text = character(),
     args = list()
-    #closeWith = character()
   )
 )
-
-
-

@@ -2,26 +2,24 @@
 
 .globals$servers = list()
 
-register_server = function(server) {
-  match = purrr::map_lgl(.globals$servers, identical, y = server)
+is_registered = function(server) {
+  any(vapply(.globals$servers, identical, logical(1), y = server))
+}
 
-  if (any(match))
-    usethis::ui_warn("Server is already registered.")
+register_server = function(server) {
+  if (is_registered(server))
+    cli::cli_warn("Server is already registered.")
   else
-    .globals$servers[[length(.globals$servers)+1]] = server
+    .globals$servers[[length(.globals$servers) + 1]] = server
 
   invisible()
 }
 
 deregister_server = function(server) {
-  match = purrr::map_lgl(.globals$servers, identical, y = server)
+  match = vapply(.globals$servers, identical, logical(1), y = server)
+  .globals$servers = .globals$servers[!match]
 
-  if (!any(match))
-    usethis::ui_warn("Unable to find matching running server.")
-  else
-    .globals$servers = .globals$servers[!match]
-
-  invisible()
+  invisible(any(match))
 }
 
 #' Stop all active livecode servers
@@ -58,7 +56,10 @@ deregister_server = function(server) {
 #'
 #' @export
 stop_all = function() {
-  purrr::walk(.globals$servers, ~ .$stop())
+  for (server in .globals$servers) {
+    server$stop()
+  }
+  invisible()
 }
 
 
@@ -83,7 +84,7 @@ stop_all = function() {
 #' @examples
 #' \dontrun{
 #' # Start a server
-#' srv <- serve_file("script.R")
+#' srv = serve_file("script.R")
 #'
 #' # View active servers
 #' list_servers()
