@@ -517,6 +517,7 @@ lc_server_iface = R6::R6Class(
         file = path.expand(file)
         if (!file.exists(file))
           cli::cli_abort("Unable to locate file {.file {file}}.")
+        file = normalizePath(file, winslash = "/")
 
         if (!identical(editor, "none"))
           ctx = editor_open(file, editor)

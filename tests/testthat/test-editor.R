@@ -142,6 +142,18 @@ test_that("editor_open waits for the requested file", {
   expect_true(same_path(ctx$path, f))
 })
 
+test_that("a relative path is matched against the editor's absolute path", {
+  f = local_test_file("x = 1")
+  local_editor("rstudio")
+  ed = fake_editor(path = f, id = "ID1")
+  withr::local_dir(dirname(f))
+
+  srv = suppressMessages(serve_file(basename(f), ip = "127.0.0.1", open_browser = FALSE))
+  withr::defer(suppressMessages(srv$stop()))
+  expect_true(same_path(srv$path, f))
+  expect_length(calls_of(ed, "navigate"), 0)
+})
+
 test_that("editor_open errors instead of serving another document", {
   f = local_test_file("x = 1")
   local_editor("rstudio")
