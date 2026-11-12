@@ -259,7 +259,13 @@ lc_server_iface = R6::R6Class(
         ip = network_interfaces()[["ip"]][1]
       }
       
-      if (is.na(iptools::ip_classify(ip))) {
+      if (is_ipv6(ip)) {
+        usethis::ui_stop(paste(
+          "IPv6 addresses ({usethis::ui_value(ip)}) are not supported, use an IPv4 address."
+        ))
+      }
+
+      if (length(ip) != 1 || !is_ipv4(ip)) {
         usethis::ui_stop(paste(
           "Invalid ip address provided ({usethis::ui_value(ip)})."
         ))
@@ -360,7 +366,7 @@ lc_server_iface = R6::R6Class(
     print = function() {
       usethis::ui_line(paste(
         crayon::bold("livecode server:"),
-        crayon::red(fs::path_file(private$file)),
+        crayon::red(basename(private$file)),
         "@",
         crayon::underline(crayon::blue(self$url))
       ))
@@ -422,7 +428,7 @@ lc_server_iface = R6::R6Class(
       )
       
       usethis::ui_done(paste(
-        "Started sharing {usethis::ui_value(fs::path_file(private$file))}",
+        "Started sharing {usethis::ui_value(basename(private$file))}",
         "at {usethis::ui_value(self$url)}."
       ))
       
@@ -678,7 +684,7 @@ serve_file = function(file,
   welcome_msg <- c(
     "## Welcome to `livecode`!",
     "",
-    glue::glue("Serving `{fs::path_file(server$path)}` at"),
+    glue::glue("Serving `{basename(server$path)}` at"),
     "",
     glue::glue(
       "<div class='server_link'><a href='{server$url}'>{server$url}</a></div>"

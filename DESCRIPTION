@@ -1,33 +1,42 @@
 Package: livecode
-Title: Broadcast a source file to multiple concurrant users
+Title: Broadcast a Source File to Multiple Concurrent Users
 Version: 0.1.0.9000
-Authors@R: 
+Authors@R:
     person(given = "Colin",
            family = "Rundel",
            role = c("aut", "cre"),
            email = "rundel@gmail.com")
 Description: Broadcast a local R (or other text) document over the web and provide live updates as it is edited.
 License: GPL (>= 3)
+URL: https://github.com/rundel/livecode
+BugReports: https://github.com/rundel/livecode/issues
 Encoding: UTF-8
-LazyData: true
-Imports: 
-    usethis,
-    readr,
+Depends:
+    R (>= 4.4.0)
+Imports:
+    cli,
+    crayon,
     glue,
-    jsonlite,
     httpuv,
     httr,
-    purrr,
-    Rcpp,
-    iptools,
+    jsonlite,
     later,
-    tibble,
-    crayon,
-    rstudioapi,
-    stringi,
     markdown,
     processx,
+    purrr,
+    R6,
+    Rcpp,
+    readr,
+    rlang,
+    rstudioapi,
+    stringi,
+    tibble,
+    usethis
+Suggests:
+    testthat (>= 3.0.0),
+    websocket,
     withr
+Config/testthat/edition: 3
 RoxygenNote: 7.3.3
-LinkingTo: 
+LinkingTo:
     Rcpp
