@@ -70,9 +70,6 @@ local_server = function(file, interval = 0.1, env = parent.frame()) {
   srv
 }
 
-# Tests never talk to a real IDE, even when run from inside one.
-options(livecode.editor = "none")
-
 local_editor = function(backend, env = parent.frame()) {
   withr::local_options(livecode.editor = backend, .local_envir = env)
   editor_reset()
