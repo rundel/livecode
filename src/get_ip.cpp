@@ -13,8 +13,6 @@
 #include <iphlpapi.h>
 #include <Ws2tcpip.h>
 
-#define WORKING_BUFFER_SIZE 15000
-
 std::string wide_to_str(wchar_t* pws) {
   std::wstring ws(pws);
 
@@ -47,12 +45,14 @@ Rcpp::CharacterVector get_ipv4_impl() {
     Rcpp::stop("Retriving network adaptors failed!");
 
   while (adapts != NULL) {
-    ifaces.push_back(
-      wide_to_str(adapts->FriendlyName) + " (" +
-      wide_to_str(adapts->Description) + ")"
-      // Need the desc because the name is user defined
-    );
-    addrs.push_back( sock_addr_to_str(adapts->FirstUnicastAddress->Address) );
+    if (adapts->FirstUnicastAddress != NULL) {
+      ifaces.push_back(
+        wide_to_str(adapts->FriendlyName) + " (" +
+        wide_to_str(adapts->Description) + ")"
+        // Need the desc because the name is user defined
+      );
+      addrs.push_back( sock_addr_to_str(adapts->FirstUnicastAddress->Address) );
+    }
 
     adapts = adapts->Next;
   };
