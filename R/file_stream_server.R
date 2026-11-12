@@ -241,10 +241,10 @@ lc_server = R6::R6Class(
 
       if (!is.null(snap[["by_id_error"]])) {
         private$by_id = FALSE
-        cli::cli_alert_warning(paste(
+        cli::cli_bullets(c("!" = paste(
           "livecode: cannot read {.file {basename(private$file)}} from RStudio by its document id",
           "({snap[['by_id_error']]}), so it is read only while it is the active document."
-        ))
+        )))
       }
 
       if (!is.null(snap[["contents"]])) {
@@ -288,9 +288,9 @@ lc_server = R6::R6Class(
         private$disk_seen = private$cache$content
       }
 
-      cli::cli_alert_info(
+      cli::cli_bullets(c("i" = 
         "livecode: {.file {basename(old)}} was renamed or saved as {.file {path}}, livecode now serves {.file {basename(path)}}."
-      )
+      ))
       invisible(TRUE)
     },
 
@@ -306,9 +306,9 @@ lc_server = R6::R6Class(
           msg = conditionMessage(e)
           if (!identical(private$errors[[label]], msg)) {
             private$errors[[label]] = msg
-            cli::cli_alert_danger(
+            cli::cli_bullets(c("x" = 
               "livecode: {label} failed, will keep retrying: {msg}"
-            )
+            ))
           }
         }
       )
@@ -626,7 +626,7 @@ lc_server_iface = R6::R6Class(
 
     start_server = function() {
       if (self$is_running()) {
-        cli::cli_alert_info("The server is already running at {.url {self$url}}.")
+        cli::cli_bullets(c("i" = "The server is already running at {.url {self$url}}."))
         return(invisible(FALSE))
       }
 
@@ -654,13 +654,13 @@ lc_server_iface = R6::R6Class(
         private$attach_tailcat()
 
       name = basename(private$file)
-      cli::cli_alert_success("Started sharing {.file {name}} at {.url {self$url}}.")
+      cli::cli_bullets(c("v" = "Started sharing {.file {name}} at {.url {self$url}}."))
 
       if (is_ip_private(private$ip)) {
-        cli::cli_alert_warning(paste(
+        cli::cli_bullets(c("!" = paste(
           "The current ip address ({.val {private$ip}}) for the server is private,",
           "only users on the same local network are likely to be able to connect."
-        ))
+        )))
       }
 
       if (!is_registered(self))
@@ -697,11 +697,11 @@ lc_server_iface = R6::R6Class(
         suppressMessages(self$stop())
         name = basename(self$path)
         if (inherits(outcome, "error")) {
-          cli::cli_alert_danger(
+          cli::cli_bullets(c("x" = 
             "Stopped sharing {.file {name}} after an error: {conditionMessage(outcome)}"
-          )
+          ))
         } else {
-          cli::cli_alert_success("Stopped sharing {.file {name}} at {.url {self$url}}.")
+          cli::cli_bullets(c("v" = "Stopped sharing {.file {name}} at {.url {self$url}}."))
         }
       }
 
@@ -887,7 +887,7 @@ lc_server_iface = R6::R6Class(
         if (!is.null(private$tailcat))
           self$stop_tailcat()
         deregister_server(self)
-        cli::cli_alert_info("The server at {.url {self$url}} is not running.")
+        cli::cli_bullets(c("i" = "The server at {.url {self$url}} is not running."))
         return(invisible(self))
       }
 
@@ -907,7 +907,7 @@ lc_server_iface = R6::R6Class(
         self$stop_tailcat()
       deregister_server(self)
 
-      cli::cli_alert_success("Stopped server at {.url {self$url}}.")
+      cli::cli_bullets(c("v" = "Stopped server at {.url {self$url}}."))
       invisible(self)
     },
 
@@ -919,7 +919,7 @@ lc_server_iface = R6::R6Class(
       if (self$is_running()) {
         private$stop_server()
         deregister_server(self)
-        cli::cli_alert_success("Stopped server at {.url {self$url}}.")
+        cli::cli_bullets(c("v" = "Stopped server at {.url {self$url}}."))
       }
 
       self$start()
@@ -946,7 +946,7 @@ lc_server_iface = R6::R6Class(
         cli::cli_abort("The server is not running, start it with {.code $start()} first.")
 
       if (!is.null(private$tailcat) && private$tailcat$is_running()) {
-        cli::cli_alert_info("The tailcat broadcast is already running, see {.field $tailcat_address}.")
+        cli::cli_bullets(c("i" = "The tailcat broadcast is already running, see {.field $tailcat_address}."))
         return(invisible(self))
       }
 
@@ -972,18 +972,18 @@ lc_server_iface = R6::R6Class(
 
       address = private$tailcat$address()
       if (!is.null(expected) && !identical(address, expected)) {
-        cli::cli_alert_warning(paste(
+        cli::cli_bullets(c("!" = paste(
           "The broadcast's address differs from the one saved with these keys,",
           "probably because tailcat's relay map changed. Post the new address below."
-        ))
+        )))
       }
 
-      cli::cli_alert_success("Tailcat broadcast ready. Students run:")
+      cli::cli_bullets(c("v" = "Tailcat broadcast ready. Students run:"))
       cli::cli_code(paste0("livecode::follow(\"", address, "\")"))
-      cli::cli_alert_info(paste(
+      cli::cli_bullets(c("i" = paste(
         "The address is a credential: post it where only you can edit,",
         "such as the course site, not in a shared document or chat."
-      ))
+      )))
 
       invisible(self)
     },
@@ -992,7 +992,7 @@ lc_server_iface = R6::R6Class(
     #' Stop the tailcat broadcast. The server itself keeps running.
     stop_tailcat = function() {
       if (is.null(private$tailcat)) {
-        cli::cli_alert_info("No tailcat broadcast is running.")
+        cli::cli_bullets(c("i" = "No tailcat broadcast is running."))
         return(invisible(self))
       }
 
@@ -1001,7 +1001,7 @@ lc_server_iface = R6::R6Class(
       private$tailcat$stop()
       private$tailcat = NULL
 
-      cli::cli_alert_success("Stopped the tailcat broadcast.")
+      cli::cli_bullets(c("v" = "Stopped the tailcat broadcast."))
       invisible(self)
     }
   ),

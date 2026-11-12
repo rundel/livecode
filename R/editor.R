@@ -93,7 +93,7 @@ editor_try = function(label, f, default = NULL) {
       msg = conditionMessage(e)
       if (!identical(editor_state$errors[[label]], msg)) {
         editor_state$errors[[label]] = msg
-        cli::cli_alert_danger("livecode: {label} failed, will keep retrying: {msg}")
+        cli::cli_bullets(c("x" = "livecode: {label} failed, will keep retrying: {msg}"))
       }
       default
     }
@@ -313,19 +313,19 @@ editor_notes = function(backend = editor_backend(), auto_save = FALSE, block = F
 }
 
 positron_blocking_note = function() {
-  cli::cli_alert_info(paste(
+  cli::cli_bullets(c("i" = paste(
     "This console now runs the broadcast until you interrupt it (Esc or Ctrl-C).",
     "Do your work in a second R console session."
-  ))
+  )))
   invisible()
 }
 
 positron_nonblocking_note = function() {
-  cli::cli_alert_info(paste(
+  cli::cli_bullets(c("i" = paste(
     "With {.code block = FALSE} livecode cannot read Positron's editor: the page shows the file",
     "as saved on disk and does not highlight the selection. Use the default {.code block = TRUE},",
     "or turn on Positron's auto save ({.field files.autoSave}) so the file on disk follows your typing."
-  ))
+  )))
   invisible()
 }
 
@@ -346,11 +346,11 @@ rstudio_whitespace_warning = function() {
   else
     "Tools > Global Options > Code > Saving"
 
-  cli::cli_alert_warning(paste(
+  cli::cli_bullets(c("!" = paste(
     "You are running livecode with {.code auto_save = TRUE} and the {.val {opt_name}}",
     "option checked in RStudio. This can result in undesirable behavior while you broadcast.",
     "To resolve this, from RStudio's menu select {.field {menu}} and uncheck {.val {opt_name}}."
-  ))
+  )))
   invisible(TRUE)
 }
 

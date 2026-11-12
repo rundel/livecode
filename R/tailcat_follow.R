@@ -195,7 +195,7 @@ lc_follower = R6::R6Class(
       private$close_client()
       private$view$stop()
       deregister_follower(self)
-      cli::cli_alert_success("Stopped following the broadcast.")
+      cli::cli_bullets(c("v" = "Stopped following the broadcast."))
       invisible(self)
     },
 
@@ -313,7 +313,7 @@ lc_follower = R6::R6Class(
         if (!identical(private$reported, "connected")) {
           private$reported = "connected"
           what = if (nzchar(hello$file)) cli::format_inline("{.file {hello$file}}") else "the broadcast"
-          cli::cli_alert_success("Following {what} at {.url {self$url}}.")
+          cli::cli_bullets(c("v" = "Following {what} at {.url {self$url}}."))
         }
         return(invisible())
       }
@@ -351,8 +351,8 @@ lc_follower = R6::R6Class(
       reason = if (is.null(e)) "The broadcast closed the connection." else conditionMessage(e)
       if (!identical(private$reported, reason)) {
         private$reported = reason
-        cli::cli_alert_warning("livecode: lost the broadcast, reconnecting.")
-        cli::cli_alert_info("{reason}")
+        cli::cli_bullets(c("!" = "livecode: lost the broadcast, reconnecting."))
+        cli::cli_bullets(c("i" = "{reason}"))
       }
 
       delay = private$retry_delay
@@ -457,7 +457,7 @@ follow = function(address, port = 4000, open_browser = TRUE, local_port = NULL) 
   new_client = function() rtailcat::TailcatClient$new(address)
   follower = lc_follower$new(new_client, port = port, local_port = local_port)
   register_follower(follower)
-  cli::cli_alert_info("Connecting to the broadcast, the page is at {.url {follower$url}}.")
+  cli::cli_bullets(c("i" = "Connecting to the broadcast, the page is at {.url {follower$url}}."))
 
   # Positron answers the request to show the page only while this call runs.
   if (open_browser && identical(editor_backend(), "positron"))
