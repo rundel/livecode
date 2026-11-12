@@ -13,7 +13,8 @@ with \code{"tc"}, as posted by the instructor.}
 \item{port}{The tailcat port of the broadcast, \code{4000} unless the
 instructor chose another.}
 
-\item{open_browser}{Should the page be opened in the browser.}
+\item{open_browser}{Should the page be opened: in Positron's Viewer pane,
+elsewhere in the system browser.}
 
 \item{local_port}{Port of the local page on \code{127.0.0.1}, by default
 a random free port.}

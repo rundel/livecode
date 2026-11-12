@@ -200,7 +200,7 @@ lc_follower = R6::R6Class(
     },
 
     open = function() {
-      utils::browseURL(self$url, browser = get_browser())
+      editor_show_page(self$url, local = TRUE)
     },
 
     print = function(...) {
@@ -389,7 +389,8 @@ deregister_follower = function(follower) {
 #'   with \code{"tc"}, as posted by the instructor.
 #' @param port The tailcat port of the broadcast, \code{4000} unless the
 #'   instructor chose another.
-#' @param open_browser Should the page be opened in the browser.
+#' @param open_browser Should the page be opened: in Positron's Viewer pane,
+#'   elsewhere in the system browser.
 #' @param local_port Port of the local page on \code{127.0.0.1}, by default
 #'   a random free port.
 #'
@@ -458,7 +459,10 @@ follow = function(address, port = 4000, open_browser = TRUE, local_port = NULL) 
   register_follower(follower)
   cli::cli_alert_info("Connecting to the broadcast, the page is at {.url {follower$url}}.")
 
-  if (open_browser)
+  # Positron answers the request to show the page only while this call runs.
+  if (open_browser && identical(editor_backend(), "positron"))
+    follower$open()
+  else if (open_browser)
     later::later(function() if (follower$is_running()) follower$open(), 0.5)
 
   invisible(follower)

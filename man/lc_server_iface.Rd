@@ -69,7 +69,8 @@ in RStudio or Positron.}
       \item{\code{auto_save}}{should the served document be saved in RStudio at
 each update tick. Not supported in Positron, see
 \code{\link{serve_file}}.}
-      \item{\code{open_browser}}{should a browser session be opened.}
+      \item{\code{open_browser}}{should the page be opened, in Positron's Viewer
+pane or else in the system browser.}
       \item{\code{tailcat}}{also broadcast over tailcat: `FALSE` (the default),
 `TRUE` for a fresh address, or keys from [tailcat_keys()] for an
 address posted ahead of time (see `$start_tailcat()`).}
@@ -87,7 +88,7 @@ means `TRUE` in Positron and `FALSE` elsewhere, see
 \if{html}{\out{<a id="method-LiveCodeServer_Interface-open"></a>}}
 \if{latex}{\out{\hypertarget{method-LiveCodeServer_Interface-open}{}}}
 \subsection{\code{LiveCodeServer_Interface$open()}}{
-  Open server in browser
+  Open the page in the browser, or in Positron's Viewer pane.
   \subsection{Usage}{
     \if{html}{\out{<div class="r">}}
     \preformatted{LiveCodeServer_Interface$open()}

@@ -83,7 +83,7 @@ The two IDEs differ in a few ways:
 | Formatting on save     | With `auto_save = TRUE`, warns if "Strip trailing horizontal whitespace when saving" is on | livecode never saves                                                                                       |
 | Rename or Save As      | Followed: the renamed document keeps being served                                          | Not followed: the original path stays served                                                               |
 
-If RStudio cannot read a document by its id, livecode says so once and reads the served document only while it is active. With `block = FALSE` in Positron, livecode cannot read the editor after startup: the page shows the file on disk with no highlight, so turn on Positron's auto save (`files.autoSave`) if you go that way. `block = TRUE` also works in RStudio and outside an IDE, for example from `Rscript`.
+The page opens in Positron's Viewer pane, and in the system browser in RStudio and other sessions (`open_browser = FALSE` opens nothing). If RStudio cannot read a document by its id, livecode says so once and reads the served document only while it is active. With `block = FALSE` in Positron, livecode cannot read the editor after startup: the page shows the file on disk with no highlight, so turn on Positron's auto save (`files.autoSave`) if you go that way. `block = TRUE` also works in RStudio and outside an IDE, for example from `Rscript`.
 
 While `serve_file()` blocks, its console is busy, so `server$send_msg()` and the other server methods cannot be called from it. If you need them, use `block = FALSE` (in Positron at the cost of the live buffer and highlight).
 
@@ -104,7 +104,7 @@ server = livecode::serve_file("lecture.R", tailcat = TRUE)
 livecode::follow("tc...")
 ```
 
-`follow()` opens a page served by the student's own R session, on 127.0.0.1 only, with the same view as the instructor's page: the highlighted file, the selected lines, and messages, which followers see as plain text. The page reconnects by itself if the broadcast drops or restarts. `stop_all()` stops followers too.
+`follow()` opens a page served by the student's own R session, on 127.0.0.1 only (in Positron's Viewer pane, elsewhere in the system browser), with the same view as the instructor's page: the highlighted file, the selected lines, and messages, which followers see as plain text. The page reconnects by itself if the broadcast drops or restarts. `stop_all()` stops followers too.
 
 On a running server, `server$start_tailcat()` and `server$stop_tailcat()` start and stop the broadcast and `server$tailcat_address` gives the address; `server$stop()` stops the broadcast as well. The broadcast runs in a separate R process, so a problem in it cannot take down your session, and it keeps going while your session is busy. It only ever sends: nothing a follower sends is read, followers that fall behind are dropped (they reconnect and catch up), and at most 150 are connected at once (`max_clients`).
 

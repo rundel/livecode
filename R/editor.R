@@ -10,6 +10,8 @@ rs_save = function(id = NULL) rstudioapi::documentSave(id)
 rs_navigate = function(file) rstudioapi::navigateToFile(file)
 rs_read_pref = function(name, default) rstudioapi::readRStudioPreference(name, default)
 rs_active_project = function() rstudioapi::getActiveProject()
+rs_viewer = function(url) rstudioapi::viewer(url)
+browse_url = function(url) utils::browseURL(url, browser = get_browser())
 platform_gui = function() .Platform$GUI
 positron_env = function() Sys.getenv("POSITRON")
 
@@ -233,6 +235,30 @@ editor_read = function(file, id = NULL, backend = editor_backend(), by_id = FALS
     path = doc[["path"]],
     by_id_error = by_id_error
   )
+}
+
+# Opens a livecode page. Positron shows the instructor's page in its Viewer
+# pane: rstudioapi::viewer() hands an http URL to a localhost proxy, which
+# reaches the LAN address the server listens on. A local page (follow())
+# checks the Origin of its websocket, which that proxy does not rewrite, so
+# it goes through browseURL(), whose browser option Positron sets to show
+# localhost URLs in the Viewer directly. Both are editor requests, so this
+# must run while a console command does, not from an idle callback.
+editor_show_page = function(url, backend = editor_backend(), local = FALSE) {
+  if (identical(backend, "positron") && !local) {
+    shown = tryCatch(
+      {
+        rs_viewer(url)
+        TRUE
+      },
+      error = function(e) FALSE
+    )
+    if (shown)
+      return(invisible("viewer"))
+  }
+
+  browse_url(url)
+  invisible("browser")
 }
 
 # Opens file in the editor and waits until it is the active document, so

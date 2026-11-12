@@ -525,6 +525,73 @@ test_that("RStudio warns about stripping whitespace from the global or project s
   expect_no_message(editor_notes(auto_save = TRUE))
 })
 
+local_page_openers = function(viewer = function(url) NULL, env = parent.frame()) {
+  opened = new.env()
+  opened$viewer = character()
+  opened$browser = character()
+  testthat::local_mocked_bindings(
+    rs_viewer = function(url) {
+      opened$viewer = c(opened$viewer, url)
+      viewer(url)
+    },
+    browse_url = function(url) opened$browser = c(opened$browser, url),
+    .env = env
+  )
+  opened
+}
+
+test_that("Positron shows the page in the Viewer pane, other backends in the browser", {
+  opened = local_page_openers()
+  expect_equal(editor_show_page("http://192.168.7.46:42244", "positron"), "viewer")
+  expect_equal(opened$viewer, "http://192.168.7.46:42244")
+  expect_length(opened$browser, 0)
+
+  expect_equal(editor_show_page("http://192.168.7.46:42244", "rstudio"), "browser")
+  expect_equal(editor_show_page("http://192.168.7.46:42244", "none"), "browser")
+  expect_length(opened$viewer, 1)
+  expect_length(opened$browser, 2)
+})
+
+test_that("a failing viewer falls back to the browser", {
+  opened = local_page_openers(viewer = function(url) stop("No active request"))
+  expect_equal(editor_show_page("http://192.168.7.46:42244", "positron"), "browser")
+  expect_length(opened$viewer, 1)
+  expect_equal(opened$browser, "http://192.168.7.46:42244")
+})
+
+test_that("a local page goes through browseURL, which Positron shows in its Viewer", {
+  opened = local_page_openers()
+  expect_equal(editor_show_page("http://127.0.0.1:5000", "positron", local = TRUE), "browser")
+  expect_length(opened$viewer, 0)
+  expect_equal(opened$browser, "http://127.0.0.1:5000")
+})
+
+test_that("serve_file opens the Viewer before returning in Positron", {
+  f = local_test_file("x = 1")
+  local_editor("positron")
+  ed = fake_editor(path = f)
+  opened = local_page_openers()
+
+  srv = suppressMessages(serve_file(f, ip = "127.0.0.1", block = FALSE))
+  withr::defer(suppressMessages(srv$stop()))
+  expect_equal(opened$viewer, srv$url)
+  expect_length(opened$browser, 0)
+})
+
+test_that("serve_file opens the browser later, from the event loop, in RStudio", {
+  f = local_test_file("x = 1")
+  local_editor("rstudio")
+  ed = fake_editor(path = f, id = "ID1")
+  opened = local_page_openers()
+
+  srv = suppressMessages(serve_file(f, ip = "127.0.0.1"))
+  withr::defer(suppressMessages(srv$stop()))
+  expect_length(opened$browser, 0)
+  pump(3, until = function() length(opened$browser) > 0)
+  expect_equal(opened$browser, srv$url)
+  expect_length(opened$viewer, 0)
+})
+
 test_that("the tests leave no task callback registered", {
   expect_equal(getTaskCallbackNames(), callbacks_at_start)
 })

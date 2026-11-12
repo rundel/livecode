@@ -34,7 +34,9 @@ update interval. RStudio only and off by default, since the editor's
 unsaved text is broadcast anyway; \code{TRUE} is an error in Positron.
 See the section on editors.}
 
-\item{open_browser}{Logical. Should a browser session be opened automatically.}
+\item{open_browser}{Logical. Should the page be opened automatically: in
+Positron's Viewer pane, or in the system browser in RStudio, outside an
+IDE, and if the Viewer cannot be used.}
 
 \item{tailcat}{Also broadcast over tailcat, so students anywhere can follow
 with [follow()]: `FALSE` (the default), `TRUE` for a fresh address, or

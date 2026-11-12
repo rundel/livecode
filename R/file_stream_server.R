@@ -719,7 +719,8 @@ lc_server_iface = R6::R6Class(
     #' @param auto_save should the served document be saved in RStudio at
     #'   each update tick. Not supported in Positron, see
     #'   \code{\link{serve_file}}.
-    #' @param open_browser should a browser session be opened.
+    #' @param open_browser should the page be opened, in Positron's Viewer
+    #'   pane or else in the system browser.
     #' @param tailcat also broadcast over tailcat: `FALSE` (the default),
     #'   `TRUE` for a fresh address, or keys from [tailcat_keys()] for an
     #'   address posted ahead of time (see `$start_tailcat()`).
@@ -758,7 +759,10 @@ lc_server_iface = R6::R6Class(
       private$init_editor_notes()
       private$send_welcome()
 
-      if (open_browser)
+      # Positron answers the viewer request only while this call runs.
+      if (open_browser && identical(private$editor, "positron"))
+        self$open()
+      else if (open_browser)
         later::later(function() if (self$is_running()) self$open(), 1)
 
       if (private$block)
@@ -766,10 +770,10 @@ lc_server_iface = R6::R6Class(
     },
 
     #' @description
-    #' Open server in browser
+    #' Open the page in the browser, or in Positron's Viewer pane.
     open = function() {
       if (self$is_running())
-        utils::browseURL(self$url, browser = get_browser())
+        editor_show_page(self$url, private$editor)
       else
         cli::cli_abort("The server is not currently running!")
     },
@@ -1042,7 +1046,9 @@ lc_server_iface = R6::R6Class(
 #'   update interval. RStudio only and off by default, since the editor's
 #'   unsaved text is broadcast anyway; \code{TRUE} is an error in Positron.
 #'   See the section on editors.
-#' @param open_browser Logical. Should a browser session be opened automatically.
+#' @param open_browser Logical. Should the page be opened automatically: in
+#'   Positron's Viewer pane, or in the system browser in RStudio, outside an
+#'   IDE, and if the Viewer cannot be used.
 #' @param tailcat Also broadcast over tailcat, so students anywhere can follow
 #'   with [follow()]: `FALSE` (the default), `TRUE` for a fresh address, or
 #'   keys from [tailcat_keys()] for an address posted ahead of time. Needs
