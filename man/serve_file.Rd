@@ -15,7 +15,9 @@ serve_file(
 }
 \arguments{
 \item{file}{Path to the file to broadcast. If not provided and running in
-RStudio, the currently active document is used.}
+RStudio or Positron, the active document is used; it must have been saved
+to a file. When a path is given in an IDE, the file is opened in the
+editor first.}
 
 \item{ip}{IPv4 address for the local server. Defaults to the first available
 network interface (see \code{network_interfaces()}).}
@@ -26,7 +28,7 @@ network interface (see \code{network_interfaces()}).}
 and pushing updates to clients.}
 
 \item{auto_save}{Logical. Should the source file be automatically saved at
-each update interval (RStudio only).}
+each update interval (RStudio and Positron, see Details).}
 
 \item{open_browser}{Logical. Should a browser session be opened automatically.}
 }
@@ -50,9 +52,37 @@ connection to all clients. Updates are pushed at the specified \code{interval},
 including:
 \itemize{
   \item Updated file contents
-  \item Cursor/selection position (RStudio only)
+  \item Cursor/selection position (RStudio and Positron)
   \item Messages sent via \code{send_msg()}
 }
+}
+\section{Editors}{
+
+In RStudio and Positron the selection in the editor is highlighted on the
+page while the served file is the active document, and the highlight is
+cleared when another document is active. With \code{auto_save = TRUE} the
+file is saved at each update so unsaved edits reach the page. The two
+IDEs differ in a few ways:
+\itemize{
+  \item RStudio saves the served document wherever it is open. Positron
+    can only save the active editor, so there the file is saved only while
+    it is the active document, and edits made while another document is
+    active reach the page once you switch back.
+  \item Positron saves without running format on save or other save
+    actions when its R kernel allows it; otherwise \code{livecode} prints
+    a note naming the \code{editor.formatOnSave} and
+    \code{files.trimTrailingWhitespace} settings, which it cannot read.
+    In RStudio a warning is printed when "Strip trailing horizontal
+    whitespace when saving" is on, globally or in the project.
+  \item In RStudio, renaming the document or saving it under another name
+    is reported once; \code{livecode} then keeps serving the original
+    file from disk and stops saving it. Positron cannot report this, so
+    the original file keeps being served without a notice.
+}
+The editor is detected automatically. Set
+\code{options(livecode.editor = "rstudio")}, \code{"positron"}, or
+\code{"none"} to override the detection, for example \code{"none"} to
+serve a file without involving the editor at all.
 
 The page highlights the file with a bundled copy of Prism, chosen by the
 file's extension: R, Quarto and R Markdown (\code{.qmd}, \code{.Rmd}),
@@ -65,6 +95,7 @@ the server drops.
 
 A welcome message is shown to every user when they connect.
 }
+
 \examples{
 \dontrun{
 srv = serve_file("script.R")

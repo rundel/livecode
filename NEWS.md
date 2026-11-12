@@ -12,12 +12,19 @@
 
 ## New features
 
+* Positron is supported alongside RStudio: `serve_file()` with no file shares the active document, the editor selection is highlighted, and `auto_save` works. Positron can only save the active editor, so there the file is saved only while it is the active tab; livecode saves without formatting when Positron's kernel allows it and otherwise names the `editor.formatOnSave` and `files.trimTrailingWhitespace` settings it cannot read. Renames are not detected in Positron.
+* The `livecode.editor` option (`"rstudio"`, `"positron"`, or `"none"`) overrides the IDE detection.
+* In RStudio, renaming the served document or saving it under another name is reported once; the original file keeps being served and is no longer auto-saved.
 * The page highlights files by extension instead of always as R, using a bundled Prism 1.29.0 (replacing the 2019 copy) with grammars for R, Quarto and R Markdown, Python, SQL, shell, Markdown, YAML, JSON, and other common languages. Other files are shown as plain text.
 * The page reconnects with backoff (1 second, doubling up to 30) after the server restarts or the network drops, and shows a small "reconnecting" indicator meanwhile.
 * The page scrolls the instructor's selection into view, unless the viewer scrolled by hand in the last few seconds.
 
 ## Bug fixes
 
+* `serve_file("file.R")` in an IDE waits until the editor shows the file instead of sleeping for half a second, and errors if the editor never shows it rather than serving whatever document is active. A missing, empty, or untitled document gives a clear error.
+* The served file is compared with the editor's document after resolving symlinks, so the selection is tracked for files reached through a symlinked directory such as `/tmp` on macOS.
+* Failing editor calls (auto-save, reading the editor) are reported once and never stop the update loop.
+* The trailing-whitespace warning reads RStudio's preference through rstudioapi and also checks the project's `.Rproj` setting.
 * The update loop starts with the server and keeps running after errors, such as a briefly missing file or no open editor, reporting each error once instead of silently stopping the broadcast.
 * A client connecting between a file change and the next update no longer prevents already connected clients from receiving that change.
 * Line highlighting no longer merges ranges that share a prefix (for example 1-10 became 10), and a selection ending at the start of a line no longer highlights that line.

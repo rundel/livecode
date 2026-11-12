@@ -467,11 +467,13 @@ lc_server_iface = R6::R6Class(
     #' @description
     #' Creates a new livecode server
     #'
-    #' @param file Path to file to broadcast.
+    #' @param file Path to file to broadcast, by default the active document
+    #'   in RStudio or Positron.
     #' @param ip ip of the server, defaults to the top result of `network_interfaces()`.
     #' @param port port of the server, defaults to a random value.
     #' @param interval page update interval in seconds.
-    #' @param auto_save should the broadcast file be auto saved each update tick.
+    #' @param auto_save should the broadcast file be auto saved each update
+    #'   tick (RStudio and Positron, see \code{\link{serve_file}}).
     #' @param open_browser should a browser session be opened.
     initialize = function(
       file = NULL, ip = NULL, port = NULL, interval = 1,
@@ -678,14 +680,16 @@ lc_server_iface = R6::R6Class(
 #' The server uses a WebSocket connection to push updates at a fixed interval.
 #'
 #' @param file Path to the file to broadcast. If not provided and running in
-#'   RStudio, the currently active document is used.
+#'   RStudio or Positron, the active document is used; it must have been saved
+#'   to a file. When a path is given in an IDE, the file is opened in the
+#'   editor first.
 #' @param ip IPv4 address for the local server. Defaults to the first available
 #'   network interface (see \code{network_interfaces()}).
 #' @param port Port for the local server. Defaults to a random available port.
 #' @param interval Numeric. Update interval in seconds for refreshing content
 #'   and pushing updates to clients.
 #' @param auto_save Logical. Should the source file be automatically saved at
-#'   each update interval (RStudio only).
+#'   each update interval (RStudio and Positron, see Details).
 #' @param open_browser Logical. Should a browser session be opened automatically.
 #'
 #' @details
@@ -694,9 +698,36 @@ lc_server_iface = R6::R6Class(
 #' including:
 #' \itemize{
 #'   \item Updated file contents
-#'   \item Cursor/selection position (RStudio only)
+#'   \item Cursor/selection position (RStudio and Positron)
 #'   \item Messages sent via \code{send_msg()}
 #' }
+#'
+#' @section Editors:
+#' In RStudio and Positron the selection in the editor is highlighted on the
+#' page while the served file is the active document, and the highlight is
+#' cleared when another document is active. With \code{auto_save = TRUE} the
+#' file is saved at each update so unsaved edits reach the page. The two
+#' IDEs differ in a few ways:
+#' \itemize{
+#'   \item RStudio saves the served document wherever it is open. Positron
+#'     can only save the active editor, so there the file is saved only while
+#'     it is the active document, and edits made while another document is
+#'     active reach the page once you switch back.
+#'   \item Positron saves without running format on save or other save
+#'     actions when its R kernel allows it; otherwise \code{livecode} prints
+#'     a note naming the \code{editor.formatOnSave} and
+#'     \code{files.trimTrailingWhitespace} settings, which it cannot read.
+#'     In RStudio a warning is printed when "Strip trailing horizontal
+#'     whitespace when saving" is on, globally or in the project.
+#'   \item In RStudio, renaming the document or saving it under another name
+#'     is reported once; \code{livecode} then keeps serving the original
+#'     file from disk and stops saving it. Positron cannot report this, so
+#'     the original file keeps being served without a notice.
+#' }
+#' The editor is detected automatically. Set
+#' \code{options(livecode.editor = "rstudio")}, \code{"positron"}, or
+#' \code{"none"} to override the detection, for example \code{"none"} to
+#' serve a file without involving the editor at all.
 #'
 #' The page highlights the file with a bundled copy of Prism, chosen by the
 #' file's extension: R, Quarto and R Markdown (\code{.qmd}, \code{.Rmd}),

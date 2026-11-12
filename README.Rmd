@@ -31,7 +31,7 @@ The package includes compiled code, so installing from source needs a working co
 ## Usage
 
 ``` r
-# From RStudio with an open R script
+# From RStudio or Positron with an open R script
 server = livecode::serve_file()
 #> ✔ Started sharing 'example.R' at <http://192.168.1.128:30000>.
 #> ! The current ip address ("192.168.1.128") for the server is private, only users on the same local network are likely to be able to connect.
@@ -50,7 +50,21 @@ server$stop()
 
 The server listens on the address of your preferred network interface, which you can inspect (and override with the `ip` argument) using `livecode::network_interfaces()`. Only IPv4 addresses are supported.
 
-The page highlights the file according to its extension (R, Quarto and R Markdown, Python, SQL, and other common languages, with anything else shown as plain text), numbers the lines as they are in the file, and highlights and scrolls to the lines selected in RStudio. If the connection drops, for example while the server restarts, the page shows that it is reconnecting and catches up on its own.
+The page highlights the file according to its extension (R, Quarto and R Markdown, Python, SQL, and other common languages, with anything else shown as plain text), numbers the lines as they are in the file, and highlights and scrolls to the lines selected in the editor. If the connection drops, for example while the server restarts, the page shows that it is reconnecting and catches up on its own.
+
+## Editors
+
+livecode works with RStudio and Positron. In either IDE, `serve_file()` with no arguments shares the active document, the lines you select are highlighted on the page, and with `auto_save = TRUE` (the default) the file is saved at every update so students see your edits as you type. From any other R session pass the path of the file; the page then updates whenever the file is saved.
+
+The two IDEs differ in a few ways:
+
+| Behavior           | RStudio                                                                    | Positron                                                                                                         |
+|--------------------|----------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------|
+| Auto-save          | Saves the served document wherever it is open                              | Saves only while the served file is the active editor tab                                                        |
+| Formatting on save | Warns if "Strip trailing horizontal whitespace when saving" is on          | Saves without formatting when possible, otherwise names `editor.formatOnSave` and `files.trimTrailingWhitespace` |
+| Rename or Save As  | Reported once; the original file keeps being served and is no longer saved | Not detected; the original file keeps being served                                                               |
+
+The IDE is detected automatically; set `options(livecode.editor = "none")` (or `"rstudio"`, `"positron"`) to override it.
 
 ## Managing servers
 
