@@ -1,9 +1,35 @@
-lc_server <- R6::R6Class(
+lc_server = R6::R6Class(
   "LiveCodeServer",
-
   cloneable = FALSE,
-  inherit = httpuv:::WebServer,
   public = list(
+    initialize = function(host, port, page, file, file_id = NULL, interval = 1) {
+      private$page = page
+      private$file = file
+      private$file_id = file_id
+      private$interval = interval
+      private$cache = file_cache(file)
+      private$state = list(content = private$cache$content, selection = NULL)
+      private$websockets = new.env(parent = emptyenv())
+
+      private$handle = httpuv::startServer(host, port, private$app())
+
+      later::later(function() self$tick(), 0)
+    },
+
+    is_running = function() {
+      !is.null(private$handle) && private$handle$isRunning()
+    },
+
+    stop = function() {
+      if (self$is_running())
+        httpuv::stopServer(private$handle)
+      invisible(self)
+    },
+
+    n_clients = function() {
+      length(ls(private$websockets))
+    },
+
     have_msgs = function() {
       length(private$msg_queue) > 0
     },
@@ -14,27 +40,202 @@ lc_server <- R6::R6Class(
       msgs
     },
 
-    peek_msgs = function() {
-      purrr::map_chr(private$msg_queue, ~ .$get_text())
+    add_msg = function(m) {
+      m = as_noty_msg(m)
+      private$msg_queue = append(private$msg_queue, m)
+      invisible(self)
     },
 
-    add_msg = function(m) {
+    # A sticky message goes to the clients connected now and to every client
+    # that connects later, so it is never queued.
+    set_sticky_msg = function(m, announce = TRUE) {
+      private$sticky_msg = if (is.null(m)) NULL else as_noty_msg(m)
 
-
-      if (is.character(m) & length(m) == 1) {
-        m = noty_msg$new(m)
+      if (announce && !is.null(private$sticky_msg)) {
+        self$broadcast(list(
+          interval = private$interval,
+          messages = list(private$sticky_msg$get_msg())
+        ))
       }
 
-      if (!inherits(m, "noty_msg")) {
-        usethis::ui_stop("Invalid message type, must either be a character or noty_msg object.")
+      invisible(self)
+    },
+
+    # Everything a newly connected client needs to match the clients that
+    # are already connected.
+    connect_frame = function() {
+      frame = list(
+        interval = private$interval,
+        content = private$state[["content"]]
+      )
+
+      if (!is.null(private$state[["selection"]]))
+        frame[["selection"]] = private$state[["selection"]]
+
+      if (!is.null(private$sticky_msg))
+        frame[["messages"]] = list(private$sticky_msg$get_msg())
+
+      frame
+    },
+
+    # Builds the next update and records it as the broadcast state. The
+    # cache is compared with what was last broadcast rather than with its
+    # own previous read, so a refresh triggered elsewhere cannot hide a
+    # change from clients.
+    build_frame = function() {
+      frame = list(interval = private$interval)
+
+      content = private$cache$content
+      if (!identical(content, private$state[["content"]])) {
+        frame[["content"]] = content
+        private$state[["content"]] = content
       }
-      private$msg_queue = append(private$msg_queue, m)
+
+      selection = editor_selection(private$file)
+      if (!is.null(selection) && !identical(selection, private$state[["selection"]])) {
+        frame[["selection"]] = selection
+        private$state[["selection"]] = selection
+      }
+
+      # Queued messages wait until someone is connected to see them.
+      if (self$n_clients() > 0 && self$have_msgs()) {
+        frame[["messages"]] = lapply(self$get_msgs(), function(m) m$get_msg())
+      }
+
+      frame
+    },
+
+    broadcast = function(frame) {
+      if (self$n_clients() == 0)
+        return(invisible(self))
+
+      json = frame_to_json(frame)
+      for (ws_id in ls(private$websockets)) {
+        ws = private$websockets[[ws_id]]
+        if (!is.null(ws))
+          try(ws$send(json), silent = TRUE)
+      }
+
+      invisible(self)
+    },
+
+    tick = function() {
+      if (!self$is_running())
+        return(invisible(FALSE))
+
+      on.exit(
+        later::later(function() self$tick(), private$interval),
+        add = TRUE
+      )
+
+      private$guard("Auto-save", function() editor_save(private$file_id))
+      private$guard("Broadcast update", function() self$broadcast(self$build_frame()))
+
+      invisible(TRUE)
     }
   ),
+
   private = list(
-    msg_queue = list()
+    handle = NULL,
+    page = NULL,
+    file = NULL,
+    file_id = NULL,
+    interval = NULL,
+    cache = NULL,
+    state = NULL,
+    websockets = NULL,
+    next_ws_id = 0L,
+    msg_queue = list(),
+    sticky_msg = NULL,
+    errors = list(),
+
+    # Reports a failing step once, until it succeeds again, instead of on
+    # every tick.
+    guard = function(label, f) {
+      tryCatch(
+        {
+          f()
+          private$errors[[label]] = NULL
+        },
+        error = function(e) {
+          msg = conditionMessage(e)
+          if (!identical(private$errors[[label]], msg)) {
+            private$errors[[label]] = msg
+            cli::cli_alert_danger(
+              "livecode: {label} failed, will keep retrying: {msg}"
+            )
+          }
+        }
+      )
+    },
+
+    app = function() {
+      list(
+        call = function(req) {
+          list(
+            status = 200L,
+            headers = list(
+              "Content-Type" = "text/html; charset=UTF-8"
+            ),
+            body = private$page
+          )
+        },
+
+        onWSOpen = function(ws) {
+          private$next_ws_id = private$next_ws_id + 1L
+          ws_id = paste0("ws", private$next_ws_id)
+          private$websockets[[ws_id]] = ws
+
+          ws$onClose(function() {
+            if (exists(ws_id, envir = private$websockets, inherits = FALSE))
+              rm(list = ws_id, envir = private$websockets)
+          })
+
+          ws$send(frame_to_json(self$connect_frame()))
+        },
+
+        staticPaths = list(
+          "/web" = pkg_resource("resources")
+        )
+      )
+    }
   )
 )
+
+as_noty_msg = function(m) {
+  if (is.character(m) && length(m) == 1)
+    m = noty_msg$new(m)
+
+  if (!inherits(m, "noty_msg"))
+    cli::cli_abort("Invalid message type, must either be a character or {.cls noty_msg} object.")
+
+  m
+}
+
+frame_to_json = function(frame) {
+  jsonlite::toJSON(frame, auto_unbox = TRUE)
+}
+
+editor_save = function(file_id) {
+  if (is_rstudio() && !is.null(file_id))
+    rstudioapi::documentSave(file_id)
+  invisible()
+}
+
+editor_selection = function(file) {
+  if (!is_rstudio())
+    return(NULL)
+
+  ctx = rstudioapi::getSourceEditorContext()
+  path = ctx[["path"]]
+  if (is.null(ctx) || length(path) != 1 || is.na(path) || !nzchar(path))
+    return(NULL)
+
+  if (!identical(path.expand(path), file))
+    return(NULL)
+
+  extract_line_nums(ctx[["selection"]])
+}
 
 
 #' Create a low-level livecode file streaming server
@@ -51,7 +252,7 @@ lc_server <- R6::R6Class(
 #' This function is primarily an internal constructor used by
 #' \code{\link{serve_file}} and \code{LiveCodeServer_Interface}.
 #'
-#' @param host Character string giving the IP address or hostname on which the
+#' @param host Character string giving the IP address on which the
 #'   server should listen.
 #' @param port Integer port number for the server.
 #' @param file Path to the file being broadcast.
@@ -76,6 +277,10 @@ lc_server <- R6::R6Class(
 #'     resources directory under \code{/web}.
 #' }
 #'
+#' The update loop starts with the server and keeps running until the server
+#' is stopped. Errors in a tick (for example a briefly missing file) are
+#' reported once and do not stop the loop.
+#'
 #' Connected clients receive JSON messages over WebSocket containing one or more
 #' of:
 #'
@@ -86,9 +291,11 @@ lc_server <- R6::R6Class(
 #'   \item \code{interval}: refresh interval
 #' }
 #'
+#' A newly connected client receives the current broadcast state (content,
+#' selection, and any sticky message) straight away.
+#'
 #' @return
-#' A \code{LiveCodeServer} R6 object inheriting from
-#' \code{httpuv:::WebServer}.
+#' A \code{LiveCodeServer} R6 object.
 #'
 #' @seealso
 #' \code{\link{serve_file}},
@@ -96,102 +303,15 @@ lc_server <- R6::R6Class(
 #' \code{\link{lc_server_iface}}
 #'
 #' @keywords internal
-file_stream_server = function(host, port, file, file_id, interval = 3, template = "prism") {
+file_stream_server = function(host, port, file, file_id = NULL, interval = 1, template = "prism") {
   port = as.integer(port)
-  file_cache = file_cache(file)
   page = glue::glue(
     readr::read_file(get_template(template)),
     lang = "r",
-    title = file
+    title = html_escape(basename(file))
   )
 
-  get_next_ws_id = local({
-    next_ws_id = 0L
-    function() {
-      sprintf("%012d", next_ws_id <<- next_ws_id + 1L)
-    }
-  })
-
-  websockets = new.env(parent = emptyenv())
-
-  websocket_loop = function() {
-    if (!server$isRunning())
-      return()
-
-    if (is_rstudio() & !is.null(file_id)) {
-      rstudioapi::documentSave(file_id)
-    }
-
-    msg = list(interval = interval)
-    if (file_cache$need_update())
-      msg[["content"]] = file_cache$content
-
-    if (server$have_msgs()) {
-      msgs = purrr::map(server$get_msgs(), ~ .$get_msg())
-
-      msg[["messages"]] = msgs
-    }
-
-    if (is_rstudio()) {
-      ctx = rstudioapi::getSourceEditorContext()
-      open_file = path.expand(ctx[["path"]])
-
-      if (file == open_file) {
-        ln = extract_line_nums(ctx[["selection"]])
-        msg[["selection"]] = ln
-      }
-    }
-
-    msg = jsonlite::toJSON(msg, auto_unbox = TRUE)
-
-    for(ws_id in names(websockets)) {
-      websockets[[ws_id]]$send(msg)
-    }
-
-    later::later(websocket_loop, interval)
-  }
-
-  app = list(
-    call = function(req) {
-      list(
-        status = 200L,
-        headers = list(
-          'Content-Type' = 'text/html; charset=UTF-8'
-        ),
-        body = page
-      )
-    },
-
-    onWSOpen = function(ws) {
-      ws_id = get_next_ws_id()
-      websockets[[ws_id]] = ws
-
-      ws$onClose(
-        function() {
-          rm(list = ws_id, envir = websockets)
-        }
-      )
-
-      ## Send initial message with current file contents
-      msg = list(
-        interval = interval,
-        content = file_cache$content
-      )
-      ws$send(jsonlite::toJSON(msg, auto_unbox = TRUE))
-
-      if (as.integer(ws_id) == 1)
-        websocket_loop()
-    },
-
-    staticPaths = list(
-      "/web" = pkg_resource("resources")
-    )
-  )
-
-  # Must be defined for the websocket_loop above to work
-  server = lc_server$new(host, port, app)
-
-  server
+  lc_server$new(host, port, page, file, file_id, interval)
 }
 
 #' Livecode Server Interface
@@ -213,92 +333,105 @@ lc_server_iface = R6::R6Class(
     template = NULL,
     interval = NULL,
     server = NULL,
-    
+    sticky_msg = NULL,
+
     init_file = function(file, auto_save) {
-      
-      if (missing(file))
-        file = NULL
-      else if (!is.null(file))
+      if (!is.null(file))
         file = path.expand(file)
-      
+
       file_id = NULL
       if (is_rstudio()) {
         if (is.character(file)) {
           rstudioapi::navigateToFile(file)
           Sys.sleep(0.5)
         }
-        
+
         ctx = rstudioapi::getSourceEditorContext()
-        
-        file = path.expand(ctx[["path"]])
-        file_id = ctx[["id"]]
+        path = ctx[["path"]]
+        if (!is.null(ctx) && length(path) == 1 && !is.na(path) && nzchar(path)) {
+          file = path.expand(path)
+          file_id = ctx[["id"]]
+        }
       }
-      
+
       if (!auto_save)
         file_id = NULL
-      
-      if (is.null(file) | file == "") {
-        usethis::ui_stop(paste(
-          "No file specified, if you are using RStudio ",
-          "make sure the current open file has been saved ",
-          "at least once."
-        ))
-      }
-      
-      private$file = file
-      private$file_id = file_id
-    },
-    
-    init_ip = function(ip) {
-      if (missing(ip)) {
-        ip = network_interfaces()[["ip"]][1]
-      }
-      
-      if (is_ipv6(ip)) {
-        usethis::ui_stop(paste(
-          "IPv6 addresses ({usethis::ui_value(ip)}) are not supported, use an IPv4 address."
+
+      if (is.null(file) || length(file) != 1 || is.na(file) || !nzchar(file)) {
+        cli::cli_abort(c(
+          "No file specified.",
+          "i" = "If you are using RStudio make sure the current open file has been saved at least once."
         ))
       }
 
-      if (length(ip) != 1 || !is_ipv4(ip)) {
-        usethis::ui_stop(paste(
-          "Invalid ip address provided ({usethis::ui_value(ip)})."
+      if (!file.exists(file))
+        cli::cli_abort("Unable to locate file {.file {file}}.")
+
+      private$file = file
+      private$file_id = file_id
+    },
+
+    init_ip = function(ip) {
+      if (is.null(ip)) {
+        ip = network_interfaces()[["ip"]][1]
+      }
+
+      if (length(ip) != 1 || is.na(ip)) {
+        cli::cli_abort("{.arg ip} must be a single IPv4 address.")
+      }
+
+      if (is_ipv6(ip)) {
+        cli::cli_abort(c(
+          "IPv6 addresses ({.val {ip}}) are not supported.",
+          "i" = "Use an IPv4 address, see {.fn livecode::network_interfaces}."
         ))
       }
-      
+
+      if (!is_ipv4(ip)) {
+        cli::cli_abort("Invalid ip address provided ({.val {ip}}).")
+      }
+
       private$ip = ip
     },
-    
+
     init_port = function(port) {
-      if (missing(port)) {
+      if (is.null(port)) {
         port = httpuv::randomPort(host = private$ip)
       }
-      
-      port = as.integer(port)
-      
-      if (port < 1024L | port > 49151L) {
-        usethis::ui_stop(paste(
-          "Invalid port ({usethis::ui_value(port)}), value must be between 1024 and 49151."
-        ))
+
+      port = suppressWarnings(as.integer(port))
+
+      if (length(port) != 1 || is.na(port) || port < 1024L || port > 49151L) {
+        cli::cli_abort(
+          "Invalid port ({.val {port}}), value must be between 1024 and 49151."
+        )
       }
-      
+
       private$port = port
     },
-    
+
+    init_interval = function(interval) {
+      if (!is.numeric(interval) || length(interval) != 1 || is.na(interval) || interval <= 0) {
+        cli::cli_abort("{.arg interval} must be a single positive number of seconds.")
+      }
+
+      private$interval = interval
+    },
+
     init_auto_save = function() {
       if (!check_strip_trailing_ws())
         return()
-      
-      opt_name = usethis::ui_value("Strip trailing horizontal whitespace when saving")
+
+      opt_name = "Strip trailing horizontal whitespace when saving"
       if (using_project())
         menu = "Tools > Project Options > Code Editing"
       else
         menu = "Tools > Global Options > Code > Saving"
-      
-      usethis::ui_oops(paste(
-        "You are running livecode with {usethis::ui_code('auto_save=TRUE')} with the {opt_name}",
-        "option checked in RStudio. This can result in undesirable behavior while you broadcast.\n",
-        "To resolve this, from RStudio's menu select:\n {menu} and uncheck {opt_name}."
+
+      cli::cli_alert_warning(paste(
+        "You are running livecode with {.code auto_save = TRUE} and the {.val {opt_name}}",
+        "option checked in RStudio. This can result in undesirable behavior while you broadcast.",
+        "To resolve this, from RStudio's menu select {.field {menu}} and uncheck {.val {opt_name}}."
       ))
     }
   ),
@@ -307,52 +440,54 @@ lc_server_iface = R6::R6Class(
     #' Creates a new livecode server
     #'
     #' @param file Path to file to broadcast.
-    #' @param ip ip of the server, defaults to the top result of `network_interfaces`.
+    #' @param ip ip of the server, defaults to the top result of `network_interfaces()`.
     #' @param port port of the server, defaults to a random value.
     #' @param interval page update interval in seconds.
-    #' @param auto_save should the broadcast file be auto saved update tic.
+    #' @param auto_save should the broadcast file be auto saved each update tick.
     #' @param open_browser should a browser session be opened.
     initialize = function(
-    file, ip, port, interval = 2,
-    auto_save = TRUE, open_browser = TRUE
+      file = NULL, ip = NULL, port = NULL, interval = 1,
+      auto_save = TRUE, open_browser = TRUE
     ) {
       private$init_file(file, auto_save)
       private$init_ip(ip)
       private$init_port(port)
-      
+      private$init_interval(interval)
+
       private$template = "prism"
-      private$interval = interval
       self$start()
-      
+
       if (auto_save)
         private$init_auto_save()
-      
+
       if (open_browser)
-        later::later(~self$open(), 1)
+        later::later(function() self$open(), 1)
     },
-    
+
     #' @description
     #' Open server in browser
     open = function() {
       if (self$is_running())
-        browseURL(self$url, browser = get_browser())
+        utils::browseURL(self$url, browser = get_browser())
       else
-        usethis::ui_stop("The server is not currently running!")
+        cli::cli_abort("The server is not currently running!")
     },
-    
+
     #' @description
     #' Class print method
-    print = function() {
-      usethis::ui_line(paste(
-        crayon::bold("livecode server:"),
-        crayon::red(basename(private$file)),
-        "@",
-        crayon::underline(crayon::blue(self$url))
-      ))
+    #' @param ... Ignored.
+    print = function(...) {
+      name = basename(private$file)
+      url = self$url
+      status = if (self$is_running()) "running" else "stopped"
+      cli::cli_text("{.strong livecode server:} {.file {name}} @ {.url {url}} ({status})")
+      invisible(self)
     },
-    
+
     #' @description
-    #' Send a noty message to all connected users on the next update tic.
+    #' Send a noty message to all connected users on the next update tick.
+    #' Messages queued while nobody is connected are held until someone
+    #' connects.
     #'
     #' @param text text of the message.
     #' @param type message type (`alert`, `success`, `warning`, `error`, `info`).
@@ -360,12 +495,15 @@ lc_server_iface = R6::R6Class(
     #' @param layout message location.
     #' @param ... additional noty arguments.
     #' @param parse_md should message text be processed as markdown before sending.
+    #' @param sticky should the message also be shown to every user who
+    #'   connects later. Only one sticky message is kept, a new one replaces it.
     send_msg = function(text,
                         type = "info",
                         theme = "bootstrap-v4",
                         layout = "topRight",
                         ...,
-                        parse_md = TRUE) {
+                        parse_md = TRUE,
+                        sticky = FALSE) {
       if (parse_md) {
         text = markdown::markdownToHTML(
           text = text,
@@ -374,97 +512,125 @@ lc_server_iface = R6::R6Class(
       } else {
         text = paste(text, collapse = "\n")
       }
-      
+
       args = c(
         list(text = text, type = type, theme = theme, layout = layout),
         list(...)
       )
-      
+
       text_has_link = grepl("<a ", text)
       closeWith_used = "closeWith" %in% names(args)
-      
-      if (text_has_link & !closeWith_used)
+
+      if (text_has_link && !closeWith_used)
         args[["closeWith"]] = list("button")
-      
-      private$server$add_msg(
-        do.call(noty_msg$new, args)
-      )
+
+      msg = do.call(noty_msg$new, args)
+
+      if (sticky) {
+        private$sticky_msg = msg
+        if (!is.null(private$server))
+          private$server$set_sticky_msg(msg)
+      } else if (!is.null(private$server)) {
+        private$server$add_msg(msg)
+      }
+
+      invisible(self)
     },
-    
+
     #' @description
     #' Determine if the server is running.
     #' @return Returns `TRUE` if the server is running.
     is_running = function() {
-      private$server$isRunning()
+      !is.null(private$server) && private$server$is_running()
     },
-    
+
     #' @description
     #' Start the server
     start = function() {
-      private$server = file_stream_server(
-        private$ip, private$port, private$file, private$file_id,
-        template = private$template, interval = private$interval
+      if (self$is_running()) {
+        cli::cli_alert_info("The server is already running at {.url {self$url}}.")
+        return(invisible(self))
+      }
+
+      private$server = tryCatch(
+        file_stream_server(
+          private$ip, private$port, private$file, private$file_id,
+          template = private$template, interval = private$interval
+        ),
+        error = function(e) {
+          cli::cli_abort(
+            "Failed to start the server at {.url {self$url}}.",
+            parent = e
+          )
+        }
       )
-      
-      usethis::ui_done(paste(
-        "Started sharing {usethis::ui_value(basename(private$file))}",
-        "at {usethis::ui_value(self$url)}."
-      ))
-      
+
+      if (!is.null(private$sticky_msg))
+        private$server$set_sticky_msg(private$sticky_msg, announce = FALSE)
+
+      name = basename(private$file)
+      cli::cli_alert_success("Started sharing {.file {name}} at {.url {self$url}}.")
+
       if (is_ip_private(private$ip)) {
-        usethis::ui_oops(paste(
-          "The current ip address ({usethis::ui_value(private$ip)}) for the server is private,",
+        cli::cli_alert_warning(paste(
+          "The current ip address ({.val {private$ip}}) for the server is private,",
           "only users on the same local network are likely to be able to connect."
         ))
       }
-      
-      register_server(self)
+
+      if (!is_registered(self))
+        register_server(self)
+
       invisible(self)
     },
-    
+
     #' @description
     #' Stop the server
     #'
     #' @param warn Should the users be sent a warning that the server is shutting down.
     stop = function(warn = FALSE) {
-      if (warn) {
-        self$send_msg("Server is shutting down!", type = "error")
-        Sys.sleep(private$interval)
-        later::run_now()
+      if (!self$is_running()) {
+        deregister_server(self)
+        cli::cli_alert_info("The server at {.url {self$url}} is not running.")
+        return(invisible(self))
       }
-      
-      Sys.sleep(private$interval)
-      
-      if (!is.null(private$server) && private$server$isRunning()) {
-        private$server$stop()
+
+      if (warn && private$server$n_clients() > 0) {
+        msg = noty_msg$new("Server is shutting down!", type = "error")
+        private$server$broadcast(list(
+          interval = private$interval,
+          messages = list(msg$get_msg())
+        ))
+        # httpuv writes from its own thread, give it a moment before the
+        # sockets are closed.
+        Sys.sleep(0.5)
       }
-      
-      usethis::ui_done(paste(
-        "Stopped server at {usethis::ui_value(self$url)}."
-      ))
-      
+
+      private$server$stop()
       deregister_server(self)
+
+      cli::cli_alert_success("Stopped server at {.url {self$url}}.")
       invisible(self)
     },
-    
+
     #' @description
     #' Restart the server
     restart = function() {
       if (self$is_running()) {
         self$stop()
       }
-      
+
       self$start()
-      
+
       invisible(self)
     }
   ),
   active = list(
     #' @field url The current url of the server.
     url = function() {
-      glue::glue("http://{private$ip}:{private$port}")
+      paste0("http://", private$ip, ":", private$port)
     },
-    
+
     #' @field path The path of the file being served.
     path = function() {
       private$file
@@ -481,7 +647,7 @@ lc_server_iface = R6::R6Class(
 #'
 #' @param file Path to the file to broadcast. If not provided and running in
 #'   RStudio, the currently active document is used.
-#' @param ip IP address for the local server. Defaults to the first available
+#' @param ip IPv4 address for the local server. Defaults to the first available
 #'   network interface (see \code{network_interfaces()}).
 #' @param port Port for the local server. Defaults to a random available port.
 #' @param interval Numeric. Update interval in seconds for refreshing content
@@ -489,7 +655,6 @@ lc_server_iface = R6::R6Class(
 #' @param auto_save Logical. Should the source file be automatically saved at
 #'   each update interval (RStudio only).
 #' @param open_browser Logical. Should a browser session be opened automatically.
-#' @param ... Additional arguments (currently ignored).
 #'
 #' @details
 #' The server is implemented using \pkg{httpuv} and maintains an open WebSocket
@@ -500,6 +665,8 @@ lc_server_iface = R6::R6Class(
 #'   \item Cursor/selection position (RStudio only)
 #'   \item Messages sent via \code{send_msg()}
 #' }
+#'
+#' A welcome message is shown to every user when they connect.
 #'
 #' @return
 #' An invisible \code{LiveCodeServer_Interface} R6 object representing the running
@@ -512,7 +679,7 @@ lc_server_iface = R6::R6Class(
 #'
 #' @examples
 #' \dontrun{
-#' srv <- serve_file("script.R")
+#' srv = serve_file("script.R")
 #'
 #' srv$send_msg("Hello, everyone!", type = "success")
 #'
@@ -520,29 +687,28 @@ lc_server_iface = R6::R6Class(
 #' }
 #'
 #' @export
-serve_file = function(file,
-                      ip,
-                      port,
+serve_file = function(file = NULL,
+                      ip = NULL,
+                      port = NULL,
                       interval = 1,
                       auto_save = TRUE,
-                      open_browser = TRUE,
-                      ...) {
-  server <- lc_server_iface$new(
+                      open_browser = TRUE) {
+  server = lc_server_iface$new(
     file = file, ip = ip, port = port,
     interval = interval,
     auto_save = auto_save, open_browser = open_browser
   )
-  
-  welcome_msg <- c(
+
+  welcome_msg = c(
     "## Welcome to `livecode`!",
     "",
-    glue::glue("Serving `{basename(server$path)}` at"),
+    paste0("Serving `", basename(server$path), "` at"),
     "",
-    glue::glue(
-      "<div class='server_link'><a href='{server$url}'>{server$url}</a></div>"
+    paste0(
+      "<div class='server_link'><a href='", server$url, "'>", server$url, "</a></div>"
     )
   )
-  
-  server$send_msg(text = welcome_msg)
+
+  server$send_msg(text = welcome_msg, sticky = TRUE)
   invisible(server)
 }

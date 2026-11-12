@@ -38,10 +38,10 @@ The interface also provides additional tools for sending messages.
   \subsection{Usage}{
     \if{html}{\out{<div class="r">}}
     \preformatted{LiveCodeServer_Interface$new(
-  file,
-  ip,
-  port,
-  interval = 2,
+  file = NULL,
+  ip = NULL,
+  port = NULL,
+  interval = 1,
   auto_save = TRUE,
   open_browser = TRUE
 )}
@@ -51,10 +51,10 @@ The interface also provides additional tools for sending messages.
     \if{html}{\out{<div class="arguments">}}
     \describe{
       \item{\code{file}}{Path to file to broadcast.}
-      \item{\code{ip}}{ip of the server, defaults to the top result of `network_interfaces`.}
+      \item{\code{ip}}{ip of the server, defaults to the top result of `network_interfaces()`.}
       \item{\code{port}}{port of the server, defaults to a random value.}
       \item{\code{interval}}{page update interval in seconds.}
-      \item{\code{auto_save}}{should the broadcast file be auto saved update tic.}
+      \item{\code{auto_save}}{should the broadcast file be auto saved each update tick.}
       \item{\code{open_browser}}{should a browser session be opened.}
     }
     \if{html}{\out{</div>}}
@@ -80,7 +80,14 @@ The interface also provides additional tools for sending messages.
   Class print method
   \subsection{Usage}{
     \if{html}{\out{<div class="r">}}
-    \preformatted{LiveCodeServer_Interface$print()}
+    \preformatted{LiveCodeServer_Interface$print(...)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{...}}{Ignored.}
+    }
     \if{html}{\out{</div>}}
   }
 }
@@ -89,7 +96,9 @@ The interface also provides additional tools for sending messages.
 \if{html}{\out{<a id="method-LiveCodeServer_Interface-send_msg"></a>}}
 \if{latex}{\out{\hypertarget{method-LiveCodeServer_Interface-send_msg}{}}}
 \subsection{\code{LiveCodeServer_Interface$send_msg()}}{
-  Send a noty message to all connected users on the next update tic.
+  Send a noty message to all connected users on the next update tick.
+Messages queued while nobody is connected are held until someone
+connects.
   \subsection{Usage}{
     \if{html}{\out{<div class="r">}}
     \preformatted{LiveCodeServer_Interface$send_msg(
@@ -98,7 +107,8 @@ The interface also provides additional tools for sending messages.
   theme = "bootstrap-v4",
   layout = "topRight",
   ...,
-  parse_md = TRUE
+  parse_md = TRUE,
+  sticky = FALSE
 )}
     \if{html}{\out{</div>}}
   }
@@ -111,6 +121,8 @@ The interface also provides additional tools for sending messages.
       \item{\code{layout}}{message location.}
       \item{\code{...}}{additional noty arguments.}
       \item{\code{parse_md}}{should message text be processed as markdown before sending.}
+      \item{\code{sticky}}{should the message also be shown to every user who
+connects later. Only one sticky message is kept, a new one replaces it.}
     }
     \if{html}{\out{</div>}}
   }

@@ -4,10 +4,17 @@
 \alias{file_stream_server}
 \title{Create a low-level livecode file streaming server}
 \usage{
-file_stream_server(host, port, file, file_id, interval = 3, template = "prism")
+file_stream_server(
+  host,
+  port,
+  file,
+  file_id = NULL,
+  interval = 1,
+  template = "prism"
+)
 }
 \arguments{
-\item{host}{Character string giving the IP address or hostname on which the
+\item{host}{Character string giving the IP address on which the
 server should listen.}
 
 \item{port}{Integer port number for the server.}
@@ -23,8 +30,7 @@ auto-save operations.}
 to \code{"prism"}.}
 }
 \value{
-A \code{LiveCodeServer} R6 object inheriting from
-\code{httpuv:::WebServer}.
+A \code{LiveCodeServer} R6 object.
 }
 \description{
 Creates and returns a low-level HTTP/WebSocket server used by
@@ -53,6 +59,10 @@ The server performs the following tasks:
     resources directory under \code{/web}.
 }
 
+The update loop starts with the server and keeps running until the server
+is stopped. Errors in a tick (for example a briefly missing file) are
+reported once and do not stop the loop.
+
 Connected clients receive JSON messages over WebSocket containing one or more
 of:
 
@@ -62,6 +72,9 @@ of:
   \item \code{selection}: highlighted line selection
   \item \code{interval}: refresh interval
 }
+
+A newly connected client receives the current broadcast state (content,
+selection, and any sticky message) straight away.
 }
 \seealso{
 \code{\link{serve_file}},

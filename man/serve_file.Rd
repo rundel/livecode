@@ -5,20 +5,19 @@
 \title{Create a livecode server for broadcasting a file}
 \usage{
 serve_file(
-  file,
-  ip,
-  port,
+  file = NULL,
+  ip = NULL,
+  port = NULL,
   interval = 1,
   auto_save = TRUE,
-  open_browser = TRUE,
-  ...
+  open_browser = TRUE
 )
 }
 \arguments{
 \item{file}{Path to the file to broadcast. If not provided and running in
 RStudio, the currently active document is used.}
 
-\item{ip}{IP address for the local server. Defaults to the first available
+\item{ip}{IPv4 address for the local server. Defaults to the first available
 network interface (see \code{network_interfaces()}).}
 
 \item{port}{Port for the local server. Defaults to a random available port.}
@@ -30,8 +29,6 @@ and pushing updates to clients.}
 each update interval (RStudio only).}
 
 \item{open_browser}{Logical. Should a browser session be opened automatically.}
-
-\item{...}{Additional arguments (currently ignored).}
 }
 \value{
 An invisible \code{LiveCodeServer_Interface} R6 object representing the running
@@ -56,10 +53,12 @@ including:
   \item Cursor/selection position (RStudio only)
   \item Messages sent via \code{send_msg()}
 }
+
+A welcome message is shown to every user when they connect.
 }
 \examples{
 \dontrun{
-srv <- serve_file("script.R")
+srv = serve_file("script.R")
 
 srv$send_msg("Hello, everyone!", type = "success")
 

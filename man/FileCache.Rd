@@ -5,7 +5,10 @@
 \title{File cache for tracking file changes}
 \description{
 An R6 class that caches the contents of a file and updates the cache
-only when the file changes on disk.
+only when the file changes on disk. A change is any difference in
+modification time or size, so a file restored with an older modification
+time is picked up too. If the file is temporarily missing (for example
+while an editor replaces it) the last cached contents are kept.
 }
 \section{Active bindings}{
   \if{html}{\out{<div class="r6-active-bindings">}}
@@ -30,14 +33,13 @@ only when the file changes on disk.
   Create a new FileCache object.
   \subsection{Usage}{
     \if{html}{\out{<div class="r">}}
-    \preformatted{FileCache$new(path, file_id = NULL)}
+    \preformatted{FileCache$new(path)}
     \if{html}{\out{</div>}}
   }
   \subsection{Arguments}{
     \if{html}{\out{<div class="arguments">}}
     \describe{
       \item{\code{path}}{Path to a file.}
-      \item{\code{file_id}}{Optional file identifier.}
     }
     \if{html}{\out{</div>}}
   }
@@ -54,7 +56,7 @@ only when the file changes on disk.
     \if{html}{\out{</div>}}
   }
   \subsection{Returns}{
-    Logical scalar.
+    Logical scalar. `FALSE` when the file cannot currently be read.
   }
 }
 
@@ -62,7 +64,7 @@ only when the file changes on disk.
 \if{html}{\out{<a id="method-FileCache-update_content"></a>}}
 \if{latex}{\out{\hypertarget{method-FileCache-update_content}{}}}
 \subsection{\code{FileCache$update_content()}}{
-  Refresh the cached file contents.
+  Refresh the cached file contents. Does nothing if the file is missing.
   \subsection{Usage}{
     \if{html}{\out{<div class="r">}}
     \preformatted{FileCache$update_content()}

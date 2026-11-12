@@ -4,12 +4,10 @@
 \alias{file_cache}
 \title{Create a file cache}
 \usage{
-file_cache(path, file_id = NULL)
+file_cache(path)
 }
 \arguments{
 \item{path}{Path to a file.}
-
-\item{file_id}{Optional editor file identifier.}
 }
 \value{
 A \code{FileCache} R6 object.
@@ -18,10 +16,11 @@ A \code{FileCache} R6 object.
 Convenience wrapper for \code{FileCache$new()}.
 }
 \examples{
-\dontrun{
-fc <- file_cache("script.R")
+f = tempfile(fileext = ".R")
+writeLines("x = 1", f)
+fc = file_cache(f)
 fc$content
-}
+
 }
 \seealso{
 \code{\link{FileCache}}

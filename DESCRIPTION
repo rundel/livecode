@@ -11,25 +11,20 @@ License: GPL (>= 3)
 URL: https://github.com/rundel/livecode
 BugReports: https://github.com/rundel/livecode/issues
 Encoding: UTF-8
-Depends:
-    R (>= 4.4.0)
 Imports:
     cli,
-    crayon,
     glue,
     httpuv,
     jsonlite,
     later,
     markdown,
-    purrr,
     R6,
     Rcpp,
     readr,
-    rlang,
     rstudioapi,
     stringi,
     tibble,
-    usethis
+    utils
 Suggests:
     testthat (>= 3.0.0),
     websocket,
