@@ -12,9 +12,11 @@ noty_msg = R6::R6Class(
                 "light", "bootstrap-v3", "bootstrap-v4"),
       timeout = 10000,
       progressBar = FALSE,
+      plain_text = NULL,
       ...
     ) {
       private$text = text
+      private$plain_text = if (is.null(plain_text)) paste(text, collapse = "\n") else paste(plain_text, collapse = "\n")
       private$args = c(
         list(
           type = match.arg(type),
@@ -43,10 +45,18 @@ noty_msg = R6::R6Class(
     },
     get_text = function() {
       private$text
+    },
+    # Shown where messages are plain text, as on a tailcat follower's page.
+    get_plain_text = function() {
+      private$plain_text
+    },
+    get_type = function() {
+      private$args[["type"]]
     }
   ),
   private = list(
     text = character(),
+    plain_text = character(),
     args = list()
   )
 )

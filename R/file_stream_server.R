@@ -15,6 +15,7 @@ lc_server = R6::R6Class(
       private$cache = file_cache(file)
       private$state = list(content = private$cache$content, selection = NULL)
       private$websockets = new.env(parent = emptyenv())
+      private$sinks = list()
 
       private$handle = httpuv::startServer(host, port, private$app())
 
@@ -33,6 +34,24 @@ lc_server = R6::R6Class(
 
     n_clients = function() {
       length(ls(private$websockets))
+    },
+
+    # A sink is a function that receives every frame, as the websockets do.
+    # It first receives the full current state.
+    add_sink = function(name, sink) {
+      private$sinks[[name]] = sink
+      private$guard(name, function() sink(self$sink_frame()))
+      invisible(self)
+    },
+
+    remove_sink = function(name) {
+      private$sinks[[name]] = NULL
+      private$errors[[name]] = NULL
+      invisible(self)
+    },
+
+    has_sinks = function() {
+      length(private$sinks) > 0
     },
 
     have_msgs = function() {
@@ -57,10 +76,7 @@ lc_server = R6::R6Class(
       private$sticky_msg = if (is.null(m)) NULL else as_noty_msg(m)
 
       if (announce && !is.null(private$sticky_msg)) {
-        self$broadcast(list(
-          interval = private$interval,
-          messages = list(private$sticky_msg$get_msg())
-        ))
+        self$emit(list(interval = private$interval, sticky = private$sticky_msg))
       }
 
       invisible(self)
@@ -79,9 +95,19 @@ lc_server = R6::R6Class(
         frame[["selection"]] = private$state[["selection"]]
 
       if (!is.null(private$sticky_msg))
-        frame[["messages"]] = list(private$sticky_msg$get_msg())
+        frame[["messages"]] = list(private$sticky_msg)
 
       frame
+    },
+
+    # The full current state for a newly added sink.
+    sink_frame = function() {
+      list(
+        interval = private$interval,
+        content = private$state[["content"]],
+        selection = if (is.null(private$state[["selection"]])) "" else private$state[["selection"]],
+        sticky = private$sticky_msg
+      )
     },
 
     # Builds the next update and records it as the broadcast state. The
@@ -103,9 +129,10 @@ lc_server = R6::R6Class(
         private$state[["selection"]] = selection
       }
 
-      # Queued messages wait until someone is connected to see them.
-      if (self$n_clients() > 0 && self$have_msgs()) {
-        frame[["messages"]] = lapply(self$get_msgs(), function(m) m$get_msg())
+      # Queued messages wait until someone is connected to see them. A
+      # sink, such as the tailcat broadcast, counts as someone.
+      if ((self$n_clients() > 0 || self$has_sinks()) && self$have_msgs()) {
+        frame[["messages"]] = self$get_msgs()
       }
 
       frame
@@ -115,13 +142,23 @@ lc_server = R6::R6Class(
       if (self$n_clients() == 0)
         return(invisible(self))
 
-      json = frame_to_json(frame)
+      json = frame_to_json(ws_frame(frame))
       for (ws_id in ls(private$websockets)) {
         ws = private$websockets[[ws_id]]
         if (!is.null(ws))
           try(ws$send(json), silent = TRUE)
       }
 
+      invisible(self)
+    },
+
+    # Sends a frame to the websockets and to every sink.
+    emit = function(frame) {
+      self$broadcast(frame)
+      for (name in names(private$sinks)) {
+        sink = private$sinks[[name]]
+        private$guard(name, function() sink(frame))
+      }
       invisible(self)
     },
 
@@ -144,7 +181,7 @@ lc_server = R6::R6Class(
       }
       private$guard("Broadcast update", function() {
         frame = self$build_frame(ctx)
-        self$broadcast(frame)
+        self$emit(frame)
       })
 
       invisible(TRUE)
@@ -163,6 +200,7 @@ lc_server = R6::R6Class(
     cache = NULL,
     state = NULL,
     websockets = NULL,
+    sinks = NULL,
     next_ws_id = 0L,
     msg_queue = list(),
     sticky_msg = NULL,
@@ -230,7 +268,7 @@ lc_server = R6::R6Class(
               rm(list = ws_id, envir = private$websockets)
           })
 
-          ws$send(frame_to_json(self$connect_frame()))
+          ws$send(frame_to_json(ws_frame(self$connect_frame())))
         },
 
         staticPaths = list(
@@ -249,6 +287,15 @@ as_noty_msg = function(m) {
     cli::cli_abort("Invalid message type, must either be a character or {.cls noty_msg} object.")
 
   m
+}
+
+# Frames carry noty_msg objects; the page gets their noty options. A sticky
+# message is shown like any other.
+ws_frame = function(frame) {
+  msgs = c(frame[["messages"]], if (!is.null(frame[["sticky"]])) list(frame[["sticky"]]))
+  frame[["sticky"]] = NULL
+  frame[["messages"]] = if (length(msgs) > 0) lapply(msgs, function(m) m$get_msg())
+  frame
 }
 
 frame_to_json = function(frame) {
@@ -530,13 +577,21 @@ lc_server_iface = R6::R6Class(
     #' @param parse_md should message text be processed as markdown before sending.
     #' @param sticky should the message also be shown to every user who
     #'   connects later. Only one sticky message is kept, a new one replaces it.
+    #' @param plain_text the text shown to tailcat followers, whose page shows
+    #'   messages as plain text rather than HTML. Defaults to `text` as
+    #'   written, before any markdown processing.
     send_msg = function(text,
                         type = "info",
                         theme = "bootstrap-v4",
                         layout = "topRight",
                         ...,
                         parse_md = TRUE,
-                        sticky = FALSE) {
+                        sticky = FALSE,
+                        plain_text = NULL) {
+      if (is.null(plain_text))
+        plain_text = text
+      plain_text = paste(plain_text, collapse = "\n")
+
       if (parse_md) {
         text = markdown::markdownToHTML(
           text = text,
@@ -548,7 +603,8 @@ lc_server_iface = R6::R6Class(
 
       args = c(
         list(text = text, type = type, theme = theme, layout = layout),
-        list(...)
+        list(...),
+        list(plain_text = plain_text)
       )
 
       text_has_link = grepl("<a ", text)
@@ -629,11 +685,11 @@ lc_server_iface = R6::R6Class(
         return(invisible(self))
       }
 
-      if (warn && private$server$n_clients() > 0) {
+      if (warn && (private$server$n_clients() > 0 || private$server$has_sinks())) {
         msg = noty_msg$new("Server is shutting down!", type = "error")
-        private$server$broadcast(list(
+        private$server$emit(list(
           interval = private$interval,
-          messages = list(msg$get_msg())
+          messages = list(msg)
         ))
         # httpuv writes from its own thread, give it a moment before the
         # sockets are closed.
@@ -781,6 +837,9 @@ serve_file = function(file = NULL,
     )
   )
 
-  server$send_msg(text = welcome_msg, sticky = TRUE)
+  server$send_msg(
+    text = welcome_msg, sticky = TRUE,
+    plain_text = paste0("Welcome to livecode! Following ", basename(server$path), ".")
+  )
   invisible(server)
 }

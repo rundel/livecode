@@ -110,7 +110,8 @@ connects.
   layout = "topRight",
   ...,
   parse_md = TRUE,
-  sticky = FALSE
+  sticky = FALSE,
+  plain_text = NULL
 )}
     \if{html}{\out{</div>}}
   }
@@ -129,6 +130,9 @@ keeps it open until it is clicked).}
       \item{\code{parse_md}}{should message text be processed as markdown before sending.}
       \item{\code{sticky}}{should the message also be shown to every user who
 connects later. Only one sticky message is kept, a new one replaces it.}
+      \item{\code{plain_text}}{the text shown to tailcat followers, whose page shows
+messages as plain text rather than HTML. Defaults to `text` as
+written, before any markdown processing.}
     }
     \if{html}{\out{</div>}}
   }

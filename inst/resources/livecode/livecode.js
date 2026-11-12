@@ -7,6 +7,8 @@
  *   selection  instructor's selected lines, such as "3-5,9" ("" clears)
  *   messages   array of Noty options to show as toasts
  *   interval   seconds until the next update, drawn as a progress circle
+ *   status     connection status of an upstream link, one of the keys of
+ *              STATUS_TEXT (sent by a tailcat follower's local server)
  *
  * The socket reconnects with backoff, and a status indicator says so while
  * the page is disconnected.
@@ -24,7 +26,8 @@
   var STATUS_TEXT = {
     connecting: "",
     connected: "",
-    reconnecting: "Disconnected, reconnecting…"
+    reconnecting: "Disconnected, reconnecting…",
+    waiting: "Connecting to the broadcast…"
   };
 
   var state = {
@@ -94,6 +97,12 @@
   // Applied in this order, each step on its own, so a bad message or option
   // can never keep the code from updating.
   var STEPS = [
+    ["status", function (status) {
+      if (typeof status !== "string" || !Object.prototype.hasOwnProperty.call(STATUS_TEXT, status)) {
+        throw new TypeError("unknown status");
+      }
+      setStatus(status);
+    }],
     ["lang", function (lang) { state.view.setLanguage(lang); }],
     ["content", function (content) {
       if (typeof content !== "string") throw new TypeError("content is not a string");
