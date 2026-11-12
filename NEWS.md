@@ -7,6 +7,14 @@
 * `file_cache()` and `FileCache$new()` no longer take a `file_id` argument.
 * The default update `interval` is now 1 second everywhere.
 * IPv6 addresses are rejected with a clear error instead of producing broken URLs.
+* `file_stream_server()` loses its `template` argument; the unused highlight.js template is gone.
+* Messages now close after 10 seconds by default; pass `timeout = FALSE` to `send_msg()` to keep one open until it is clicked.
+
+## New features
+
+* The page highlights files by extension instead of always as R, using a bundled Prism 1.29.0 (replacing the 2019 copy) with grammars for R, Quarto and R Markdown, Python, SQL, shell, Markdown, YAML, JSON, and other common languages. Other files are shown as plain text.
+* The page reconnects with backoff (1 second, doubling up to 30) after the server restarts or the network drops, and shows a small "reconnecting" indicator meanwhile.
+* The page scrolls the instructor's selection into view, unless the viewer scrolled by hand in the last few seconds.
 
 ## Bug fixes
 
@@ -20,6 +28,11 @@
 * The page title is the escaped file name rather than the full path.
 * Interface ranking prefers `eth*` and other physical adapters over Docker, VPN, and virtual machine adapters.
 * On Windows, adapters without a unicast address are skipped instead of being dereferenced.
+* Line numbers are the file's real line numbers: leading blank lines and indentation are no longer stripped.
+* Clearing the file clears the page, and the highlight clears when the served file is not the active document.
+* Source text is shown exactly, so `&amp;` or `&lt;-` in a file no longer display as `&` or `<-`.
+* Moving the cursor no longer re-highlights the whole file, and a malformed message can no longer block a content update.
+* The page has a viewport and language set, works on phones, and turns off the progress indicator and toast animations when the viewer prefers reduced motion.
 
 ## Internal changes
 
@@ -28,3 +41,4 @@
 * The server wraps `httpuv::startServer()` instead of inheriting from httpuv's internal `WebServer` class.
 * Running servers are stopped when the package is unloaded.
 * Added a testthat test suite and a current GitHub Actions check workflow.
+* Unused Prism grammars, plugins, themes and Makefile, Noty source maps and unminified source, and the hex logo PNG are no longer installed.

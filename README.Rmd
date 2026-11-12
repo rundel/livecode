@@ -50,6 +50,8 @@ server$stop()
 
 The server listens on the address of your preferred network interface, which you can inspect (and override with the `ip` argument) using `livecode::network_interfaces()`. Only IPv4 addresses are supported.
 
+The page highlights the file according to its extension (R, Quarto and R Markdown, Python, SQL, and other common languages, with anything else shown as plain text), numbers the lines as they are in the file, and highlights and scrolls to the lines selected in RStudio. If the connection drops, for example while the server restarts, the page shows that it is reconnecting and catches up on its own.
+
 ## Managing servers
 
 Every server started in the current session is tracked, so you can find or stop them even if you did not keep the returned object.
