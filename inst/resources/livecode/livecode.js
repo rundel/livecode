@@ -145,8 +145,12 @@
     });
   }
 
+  // The socket keeps the page's directory: a proxy in front of the server,
+  // such as Posit Workbench's, routes by that path.
   function socketUrl() {
-    return (window.location.protocol === "https:" ? "wss://" : "ws://") + window.location.host;
+    var loc = window.location;
+    var dir = loc.pathname.replace(/[^/]*$/, "");
+    return (loc.protocol === "https:" ? "wss://" : "ws://") + loc.host + dir;
   }
 
   function scheduleReconnect() {

@@ -56,6 +56,38 @@ test_that("requests for another host are refused", {
   expect_equal(fetch_with_host(view$url(), paste0("localhost:", port))$status_code, 200L)
 })
 
+test_that("the Posit Workbench address is read from RS_SERVER_URL", {
+  expect_null(workbench_proxy(""))
+  expect_null(workbench_proxy("not a url"))
+  expect_equal(
+    workbench_proxy("https://Workbench.Example/"),
+    list(origin = "https://workbench.example", host = "workbench.example")
+  )
+  expect_equal(
+    workbench_proxy("http://workbench.example:8787/rstudio/"),
+    list(origin = "http://workbench.example:8787", host = "workbench.example:8787")
+  )
+})
+
+test_that("a page behind Posit Workbench is served, and only to its address", {
+  withr::local_envvar(RS_SERVER_URL = "https://workbench.example/")
+  view = follower_view$new()
+  on.exit(view$stop())
+  view$update(list(content = "secret lecture"))
+
+  expect_equal(fetch_with_host(view$url(), "workbench.example")$status_code, 200L)
+  expect_equal(fetch_with_host(view$url(), "evil.example")$status_code, 403L)
+
+  proxied = origin_client(view$url(), origin = "https://workbench.example")
+  expect_equal(proxied$frames[[1]]$content, "secret lecture")
+
+  for (origin in c("http://workbench.example", "https://workbench.example.evil.example")) {
+    evil = origin_client(view$url(), origin = origin)
+    pump(1, until = function() evil$closed)
+    expect_length(evil$frames, 0)
+  }
+})
+
 test_that("websockets with a foreign Origin are closed without data", {
   view = follower_view$new()
   on.exit(view$stop())

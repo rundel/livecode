@@ -12,6 +12,7 @@ follower_view = R6::R6Class(
       private$port = as.integer(port)
       private$state = list(file = "", lang = "none", content = "", selection = "", status = "waiting")
       private$websockets = new.env(parent = emptyenv())
+      private$proxy = workbench_proxy()
       private$handle = httpuv::startServer(host, private$port, private$app())
     },
 
@@ -60,6 +61,7 @@ follower_view = R6::R6Class(
   private = list(
     handle = NULL,
     port = NULL,
+    proxy = NULL,
     state = NULL,
     websockets = NULL,
     next_ws_id = 0L,
@@ -81,18 +83,25 @@ follower_view = R6::R6Class(
     # Only this machine's own page may use the server. Checking the Host
     # header stops DNS rebinding, and checking the Origin of a websocket
     # stops any other web page open in the browser from reading the session.
+    # In a Posit Workbench session the page is reached through Workbench's
+    # address, which signs the user in before it forwards anything, so that
+    # address is accepted too.
     allowed_hosts = function() {
-      paste0(c("127.0.0.1", "localhost"), ":", private$port)
+      c(paste0(c("127.0.0.1", "localhost"), ":", private$port), private$proxy$host)
+    },
+
+    allowed_origins = function() {
+      c(paste0("http://", c("127.0.0.1", "localhost"), ":", private$port), private$proxy$origin)
     },
 
     host_ok = function(req) {
       host = req[["HTTP_HOST"]]
-      !is.null(host) && host %in% private$allowed_hosts()
+      !is.null(host) && tolower(host) %in% private$allowed_hosts()
     },
 
     origin_ok = function(req) {
       origin = req[["HTTP_ORIGIN"]]
-      is.null(origin) || origin %in% paste0("http://", private$allowed_hosts())
+      is.null(origin) || tolower(origin) %in% private$allowed_origins()
     },
 
     app = function() {
@@ -138,6 +147,17 @@ follower_view = R6::R6Class(
     }
   )
 )
+
+# The address of the Posit Workbench server this session runs under, which
+# Workbench puts in RS_SERVER_URL, as the Host and Origin a browser sends to
+# it; NULL elsewhere.
+workbench_proxy = function(url = Sys.getenv("RS_SERVER_URL")) {
+  url = tolower(url)
+  m = regmatches(url, regexec("^(https?://([^/?#@]+))(/|$)", url))[[1]]
+  if (length(m) == 0)
+    return(NULL)
+  list(origin = m[2], host = m[3])
+}
 
 # Follows a tailcat broadcast. Everything received is text to display:
 # lines are capped in length, every field is validated and rebuilt, and
