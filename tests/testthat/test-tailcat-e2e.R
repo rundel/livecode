@@ -123,8 +123,8 @@ test_that("a follower sees the file, its updates, and messages as plain text", {
   expect_true(fl$has_ended())
   expect_false(fl$is_connected())
   expect_true(fl$is_running())
-  pump(5, until = function() identical(last_status(page), "ended"))
-  expect_equal(last_status(page), "ended")
+  pump(5, until = function() identical(last_status(page), "finished"))
+  expect_equal(last_status(page), "finished")
 
   suppressMessages(stop_all())
   expect_false(fl$is_running())

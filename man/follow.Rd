@@ -22,8 +22,7 @@ a random free port.}
 }
 \value{
 An invisible \code{LiveCodeFollower} R6 object with \code{$stop()},
-\code{$open()}, and \code{$url}. \code{\link{stop_all}} stops followers
-too.
+\code{$open()}, \code{$url}, and \code{$local_port}.
 }
 \description{
 Shows a session broadcast with \code{serve_file(tailcat = TRUE)} on a
@@ -32,7 +31,10 @@ connection. The page looks like the instructor's: the file highlighted,
 the lines the instructor selects, and messages.
 }
 \details{
-The page is served on \code{127.0.0.1} only and works while the R
+The page is served on \code{127.0.0.1} only, under a random token in its
+address without which nothing is served, so only the page that
+\code{follow()} opens can read the session, also when an IDE shows it
+through a proxy such as Posit Workbench's. It works while the R
 session is idle at the console, or while the \pkg{later} event loop
 otherwise runs. If the broadcast is interrupted, for example while the
 instructor restarts it or the network drops, the page shows that it is
@@ -53,7 +55,23 @@ posted somewhere only they can edit, such as the course site.
 Needs the rtailcat package, which is not on CRAN; install it with
 \code{pak::pak("rundel/rtailcat")}, which builds it from source and needs
 a Go toolchain.
+
+Calling \code{follow()} again with an address that is already being
+followed does not start a second page: it opens the page of the running
+follower and returns that follower. Once the broadcast has ended, or the
+follower was stopped, \code{follow()} starts a new one.
 }
+\section{Stopping}{
+
+Following runs until it is stopped: \code{\link{unfollow}()} stops every
+follower of the session, or the one whose page is on a given port, and
+\code{$stop()} on the returned object stops that one. Either closes the connection to the broadcast and
+the local page's server; the page then says that following has stopped.
+\code{follow()} says so when it starts, and again when the broadcast
+ends, after which the local page stays up with the last text until it is
+stopped. Closing the Viewer or the browser tab does not stop it.
+}
+
 \examples{
 \dontrun{
 f = livecode::follow("tc...")
@@ -62,5 +80,5 @@ f$stop()
 
 }
 \seealso{
-\code{\link{serve_file}}
+\code{\link{unfollow}}, \code{\link{serve_file}}
 }

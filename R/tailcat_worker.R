@@ -314,14 +314,20 @@ tailcat_worker_run = function(dir, file, lang, interval, port = tc_default_port,
             # Give the last frames, such as a shutdown message, a moment,
             # then tell the followers that this is the end rather than a
             # dropped connection.
+            # A follower with a write still in flight is dropped by the next
+            # send, so each line waits for the one before it.
+            settle = function() {
+              deadline = Sys.time() + 1
+              while (hub$n_pending() > 0 && Sys.time() < deadline)
+                later::run_now(0.05)
+            }
             final = if (gone) NULL else tc_apply_frames(state, tc_spool_take(dir))
+            settle()
             for (line in list(final, tc_encode(tc_bye()))) {
               if (is.null(line))
                 next
               hub$send(line)
-              deadline = Sys.time() + 1
-              while (hub$n_pending() > 0 && Sys.time() < deadline)
-                later::run_now(0.05)
+              settle()
             }
             break
           }

@@ -21,15 +21,23 @@ fetch_with_host = function(url, host) {
   res
 }
 
+view_base = function(view) {
+  sub("^(http://[^/]+)/.*$", "\\1", view$url())
+}
+
 test_that("the local page is served on 127.0.0.1 in plain-text message mode", {
   view = follower_view$new()
   on.exit(view$stop())
-  expect_match(view$url(), "^http://127\\.0\\.0\\.1:[0-9]+$")
+  expect_match(view$url(), "^http://127\\.0\\.0\\.1:[0-9]+/[0-9a-f]{32}/$")
 
   res = http_get(view$url())
   expect_equal(res$status_code, 200L)
   page = rawToChar(res$content)
   expect_match(page, "data-message-mode=\"text\"", fixed = TRUE)
+  expect_match(page, "<meta name=\"referrer\" content=\"no-referrer\">", fixed = TRUE)
+
+  # The page's files are found next to it, under the token.
+  expect_equal(http_get(paste0(view$url(), "web/livecode/livecode.js"))$status_code, 200L)
 
   instructor = livecode_page("a.R")
   expect_match(instructor, "data-message-mode=\"html\"", fixed = TRUE)
@@ -42,72 +50,72 @@ test_that("the local page is not reachable on other interfaces", {
 
   view = follower_view$new()
   on.exit(view$stop())
-  port = sub("^.*:", "", view$url())
-  res = http_get(paste0("http://", ips[1], ":", port), seconds = 3)
+  url = sub("127.0.0.1", ips[1], view$url(), fixed = TRUE)
+  res = http_get(url, seconds = 3)
   expect_true(is.null(res) || is.na(res$status_code))
 })
 
-test_that("requests for another host are refused", {
+test_that("every page has a token of its own, from the system's random source", {
+  set.seed(1)
+  first = random_token()
+  set.seed(1)
+  second = random_token()
+  expect_match(first, "^[0-9a-f]{32}$")
+  expect_false(identical(first, second))
+
+  a = follower_view$new()
+  on.exit(a$stop())
+  b = follower_view$new()
+  on.exit(b$stop(), add = TRUE)
+  expect_false(identical(sub("^.*:[0-9]+", "", a$url()), sub("^.*:[0-9]+", "", b$url())))
+})
+
+test_that("nothing is served without the page's token", {
   view = follower_view$new()
   on.exit(view$stop())
-  port = sub("^.*:", "", view$url())
+  base = view_base(view)
+  wrong = paste0(strrep("0", 32), "/")
 
-  expect_equal(fetch_with_host(view$url(), "evil.example")$status_code, 403L)
-  expect_equal(fetch_with_host(view$url(), paste0("localhost:", port))$status_code, 200L)
+  for (path in c("/", paste0("/", wrong), "/web/livecode/livecode.js", paste0("/", wrong, "web/livecode/livecode.js")))
+    expect_true(http_get(paste0(base, path))$status_code %in% c(403L, 404L), info = path)
+
+  # The token as a prefix of a longer name, or without its slash, is not it.
+  token = sub("^.*/([0-9a-f]{32})/$", "\\1", view$url())
+  expect_equal(http_get(paste0(base, "/", token))$status_code, 403L)
+  expect_equal(http_get(paste0(base, "/", token, "0/"))$status_code, 403L)
+  expect_equal(http_get(paste0(view$url(), "other"))$status_code, 404L)
 })
 
-test_that("the Posit Workbench address is read from RS_SERVER_URL", {
-  expect_null(workbench_proxy(""))
-  expect_null(workbench_proxy("not a url"))
-  expect_equal(
-    workbench_proxy("https://Workbench.Example/"),
-    list(origin = "https://workbench.example", host = "workbench.example")
-  )
-  expect_equal(
-    workbench_proxy("http://workbench.example:8787/rstudio/"),
-    list(origin = "http://workbench.example:8787", host = "workbench.example:8787")
-  )
-})
-
-test_that("a page behind Posit Workbench is served, and only to its address", {
-  withr::local_envvar(RS_SERVER_URL = "https://workbench.example/")
+test_that("the page is served to a proxy's address when the token is right", {
   view = follower_view$new()
   on.exit(view$stop())
   view$update(list(content = "secret lecture"))
 
   expect_equal(fetch_with_host(view$url(), "workbench.example")$status_code, 200L)
-  expect_equal(fetch_with_host(view$url(), "evil.example")$status_code, 403L)
+  expect_equal(fetch_with_host(paste0(view_base(view), "/"), "workbench.example")$status_code, 403L)
 
   proxied = origin_client(view$url(), origin = "https://workbench.example")
   expect_equal(proxied$frames[[1]]$content, "secret lecture")
-
-  for (origin in c("http://workbench.example", "https://workbench.example.evil.example")) {
-    evil = origin_client(view$url(), origin = origin)
-    pump(1, until = function() evil$closed)
-    expect_length(evil$frames, 0)
-  }
 })
 
-test_that("websockets with a foreign Origin are closed without data", {
+test_that("websockets without the token are closed without data, whatever their Origin", {
   view = follower_view$new()
   on.exit(view$stop())
   view$update(list(content = "secret lecture"))
+  base = view_base(view)
 
-  evil = origin_client(view$url(), origin = "http://evil.example")
-  pump(1, until = function() evil$closed)
-  expect_true(evil$closed)
-  expect_length(evil$frames, 0)
+  for (url in c(base, paste0(base, "/"), paste0(base, "/", strrep("0", 32), "/"))) {
+    for (origin in list(NULL, base, "https://workbench.example")) {
+      evil = origin_client(url, origin = origin)
+      pump(1, until = function() evil$closed)
+      expect_true(evil$closed)
+      expect_length(evil$frames, 0)
+    }
+  }
 
-  sneaky = origin_client(view$url(), origin = paste0(view$url(), ".evil.example"))
-  pump(1, until = function() sneaky$closed)
-  expect_length(sneaky$frames, 0)
-
-  own = origin_client(view$url(), origin = view$url())
+  own = origin_client(view$url(), origin = base)
   expect_false(own$closed)
   expect_equal(own$frames[[1]]$content, "secret lecture")
-
-  none = origin_client(view$url())
-  expect_equal(none$frames[[1]]$content, "secret lecture")
 })
 
 test_that("a follower relays validated frames and drops everything else", {
@@ -283,8 +291,8 @@ test_that("a bye ends the session: the page is told, and nothing is dialed again
   expect_true(conn$closed)
   expect_true(client$closed)
 
-  pump(1, until = function() identical(page$frames[[length(page$frames)]], list(status = "ended")))
-  expect_equal(page$frames[[length(page$frames)]], list(status = "ended"))
+  pump(1, until = function() identical(page$frames[[length(page$frames)]], list(status = "finished")))
+  expect_equal(page$frames[[length(page$frames)]], list(status = "finished"))
   expect_false("after the end" %in% contents(page))
 
   pump(1.5)
@@ -292,7 +300,7 @@ test_that("a bye ends the session: the page is told, and nothing is dialed again
   expect_false(page$closed)
 
   late = origin_client(follower$url, origin = follower$url)
-  expect_equal(late$frames[[1]]$status, "ended")
+  expect_equal(late$frames[[1]]$status, "finished")
   expect_equal(late$frames[[1]]$content, "x = 1\n")
   expect_message(print(follower), "ended")
 })
@@ -304,7 +312,7 @@ test_that("stopping a follower tells its page that the session has ended", {
   suppressMessages(follower$stop())
   pump(1, until = function() page$closed)
   expect_true(page$closed)
-  expect_equal(page$frames[[length(page$frames)]], list(status = "ended"))
+  expect_equal(page$frames[[length(page$frames)]], list(status = "stopped"))
 })
 
 test_that("the route of the connection is read from a discovery ping", {
@@ -330,7 +338,7 @@ test_that("the page is told whether the connection is direct or relayed, until i
   expect_equal(page$frames[[1]]$route, list(kind = "relay", relay = "nyc"))
 
   suppressMessages(follower$receive(c(hello_bytes(), lines_bytes(tc_bye()))))
-  pump(1, until = function() identical(page$frames[[length(page$frames)]], list(status = "ended")))
+  pump(1, until = function() identical(page$frames[[length(page$frames)]], list(status = "finished")))
   routes = Filter(Negate(is.null), lapply(page$frames[-1], function(f) f$route))
   expect_equal(routes, list(list(kind = "", relay = "")))
 })
@@ -360,4 +368,51 @@ test_that("an outage is reported in one line, and once more if it lasts", {
   expect_equal(sum(grepl("Lost the broadcast, reconnecting: the broadcast closed the connection.", msgs, fixed = TRUE)), 1)
   expect_equal(sum(grepl("Still reconnecting: no broadcast at this address.", msgs, fixed = TRUE)), 1)
   expect_equal(sum(grepl("reconnecting", msgs)), 2)
+})
+
+test_that("a running follower of the same address and port is found, to be reused", {
+  follower = suppressMessages(lc_follower$new(
+    function() fake_client(list(fake_conn())), port = 4000L, address = "tcSAME"
+  ))
+  register_follower(follower)
+  withr::defer(if (follower$is_running()) suppressMessages(follower$stop()))
+
+  expect_identical(find_follower("tcSAME", 4000L), follower)
+  expect_null(find_follower("tcOTHER", 4000L))
+  expect_null(find_follower("tcSAME", 4001L))
+
+  # A broadcast that has ended is a session of its own: follow() starts anew.
+  suppressMessages(follower$receive(c(hello_bytes(), lines_bytes(tc_bye()))))
+  expect_null(find_follower("tcSAME", 4000L))
+
+  again = suppressMessages(lc_follower$new(
+    function() fake_client(list(fake_conn())), port = 4000L, address = "tcSAME"
+  ))
+  register_follower(again)
+  expect_identical(find_follower("tcSAME", 4000L), again)
+  suppressMessages(again$stop())
+  expect_null(find_follower("tcSAME", 4000L))
+})
+
+test_that("unfollow stops every follower, or the one whose page is on a port", {
+  expect_message(expect_equal(unfollow(), 0L), "Not following")
+
+  a = local_follower(fake_client(list(fake_conn())))
+  b = local_follower(fake_client(list(fake_conn())))
+  expect_false(identical(a$local_port, b$local_port))
+  expect_match(a$url, paste0(":", a$local_port, "/"), fixed = TRUE)
+
+  expect_error(unfollow("x"), "port")
+  expect_error(unfollow(c(1, 2)), "port")
+  free = setdiff(1024:65535, c(a$local_port, b$local_port))[1]
+  expect_error(unfollow(free), "No follower")
+  expect_true(a$is_running() && b$is_running())
+
+  expect_message(expect_equal(unfollow(a$local_port), 1L), "Stopped following")
+  expect_false(a$is_running())
+  expect_true(b$is_running())
+
+  suppressMessages(expect_equal(unfollow(), 1L))
+  expect_false(b$is_running())
+  expect_length(.globals$followers, 0)
 })

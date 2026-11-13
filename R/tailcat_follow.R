@@ -1,6 +1,14 @@
 # The follower's local page: an httpuv server on 127.0.0.1 that serves the
 # same page as the instructor's server and relays validated frames to it
 # over a websocket. It never takes input from the page.
+#
+# The page lives under a random token in its URL, and nothing is served
+# without it. The token is what says that a request comes from this
+# follower's own page: an IDE's Viewer may reach the page through a proxy,
+# such as Posit Workbench's, whose address is shared by every user and
+# session of the service, so the Host and Origin headers cannot say that.
+# It also keeps out any other web page open in the browser, a DNS rebinding
+# page included, and other users of the same computer.
 follower_view = R6::R6Class(
   "livecode_follower_view",
   cloneable = FALSE,
@@ -15,12 +23,16 @@ follower_view = R6::R6Class(
         route = tc_route_unknown()
       )
       private$websockets = new.env(parent = emptyenv())
-      private$proxy = workbench_proxy()
+      private$token = random_token()
       private$handle = httpuv::startServer(host, private$port, private$app())
     },
 
     url = function() {
-      paste0("http://127.0.0.1:", private$port)
+      paste0("http://127.0.0.1:", private$port, private$root())
+    },
+
+    local_port = function() {
+      private$port
     },
 
     file = function() {
@@ -65,7 +77,7 @@ follower_view = R6::R6Class(
 
     stop = function() {
       if (self$is_running()) {
-        close_websockets(private$websockets, list(status = "ended"))
+        close_websockets(private$websockets, list(status = "stopped"))
         httpuv::stopServer(private$handle)
       }
       private$beat()
@@ -76,7 +88,7 @@ follower_view = R6::R6Class(
   private = list(
     handle = NULL,
     port = NULL,
-    proxy = NULL,
+    token = NULL,
     state = NULL,
     websockets = NULL,
     next_ws_id = 0L,
@@ -114,40 +126,37 @@ follower_view = R6::R6Class(
       private$state[c("status", "lang", "content", "selection", "route")]
     },
 
-    # Only this machine's own page may use the server. Checking the Host
-    # header stops DNS rebinding, and checking the Origin of a websocket
-    # stops any other web page open in the browser from reading the session.
-    # In a Posit Workbench session the page is reached through Workbench's
-    # address, which signs the user in before it forwards anything, so that
-    # address is accepted too.
-    allowed_hosts = function() {
-      c(paste0(c("127.0.0.1", "localhost"), ":", private$port), private$proxy$host)
+    root = function() {
+      paste0("/", private$token, "/")
     },
 
-    allowed_origins = function() {
-      c(paste0("http://", c("127.0.0.1", "localhost"), ":", private$port), private$proxy$origin)
+    static_paths = function() {
+      paths = list(pkg_resource("resources"))
+      names(paths) = paste0(private$root(), "web")
+      paths
     },
 
-    host_ok = function(req) {
-      host = req[["HTTP_HOST"]]
-      !is.null(host) && tolower(host) %in% private$allowed_hosts()
-    },
-
-    origin_ok = function(req) {
-      origin = req[["HTTP_ORIGIN"]]
-      is.null(origin) || tolower(origin) %in% private$allowed_origins()
+    path_ok = function(req) {
+      path = req[["PATH_INFO"]]
+      is_string(path) && startsWith(path, private$root())
     },
 
     app = function() {
+      refuse = function(status, text) {
+        list(
+          status = status,
+          headers = list("Content-Type" = "text/plain; charset=UTF-8"),
+          body = text
+        )
+      }
+
       list(
         call = function(req) {
-          if (!private$host_ok(req)) {
-            return(list(
-              status = 403L,
-              headers = list("Content-Type" = "text/plain; charset=UTF-8"),
-              body = "Forbidden"
-            ))
-          }
+          if (!private$path_ok(req))
+            return(refuse(403L, "Forbidden"))
+          if (!identical(req[["PATH_INFO"]], private$root()))
+            return(refuse(404L, "Not found"))
+
           file = if (nzchar(private$state$file)) private$state$file else "livecode"
           list(
             status = 200L,
@@ -157,7 +166,7 @@ follower_view = R6::R6Class(
         },
 
         onWSOpen = function(ws) {
-          if (!private$host_ok(ws$request) || !private$origin_ok(ws$request)) {
+          if (!private$path_ok(ws$request)) {
             ws$close()
             return(invisible())
           }
@@ -174,24 +183,11 @@ follower_view = R6::R6Class(
           ws$send(frame_to_json(private$connect_frame()))
         },
 
-        staticPaths = list(
-          "/web" = pkg_resource("resources")
-        )
+        staticPaths = private$static_paths()
       )
     }
   )
 )
-
-# The address of the Posit Workbench server this session runs under, which
-# Workbench puts in RS_SERVER_URL, as the Host and Origin a browser sends to
-# it; NULL elsewhere.
-workbench_proxy = function(url = Sys.getenv("RS_SERVER_URL")) {
-  url = tolower(url)
-  m = regmatches(url, regexec("^(https?://([^/?#@]+))(/|$)", url))[[1]]
-  if (length(m) == 0)
-    return(NULL)
-  list(origin = m[2], host = m[3])
-}
 
 # Follows a tailcat broadcast. Everything received is text to display:
 # lines are capped in length, every field is validated and rebuilt, and
@@ -206,8 +202,9 @@ lc_follower = R6::R6Class(
   cloneable = FALSE,
   public = list(
     initialize = function(new_client, port = tc_default_port, local_port = NULL,
-                          dial_timeout = 30) {
+                          dial_timeout = 30, address = NULL) {
       private$new_client = new_client
+      private$address = address
       private$port = port
       private$dial_timeout = dial_timeout
       private$view = follower_view$new(local_port)
@@ -239,6 +236,13 @@ lc_follower = R6::R6Class(
 
     is_connected = function() {
       !is.null(private$conn) && private$have_hello
+    },
+
+    # Is this follower still following the broadcast at this address and
+    # port? One that was stopped, or whose broadcast has ended, is not.
+    follows = function(address, port) {
+      self$is_running() && !private$ended &&
+        identical(private$address, address) && identical(private$port, port)
     },
 
     # TRUE once the broadcast said that it stopped. The page stays up with
@@ -286,11 +290,18 @@ lc_follower = R6::R6Class(
   active = list(
     url = function() {
       private$view$url()
+    },
+
+    # The port of the local page, which is how unfollow() tells followers
+    # apart.
+    local_port = function() {
+      private$view$local_port()
     }
   ),
 
   private = list(
     new_client = NULL,
+    address = NULL,
     client = NULL,
     view = NULL,
     conn = NULL,
@@ -451,7 +462,7 @@ lc_follower = R6::R6Class(
         private$reported = "unreachable"
         cli::cli_bullets(c(
           "i" = "Still reconnecting: {reason}",
-          " " = "This keeps trying on its own, {.fn livecode::stop_all} stops it."
+          " " = "This keeps trying on its own, run {.run livecode::unfollow()} to stop following."
         ))
       }
       invisible()
@@ -467,11 +478,11 @@ lc_follower = R6::R6Class(
         private$cancel_retry()
       private$close_conn()
       private$close_client()
-      private$view$set_status("ended")
+      private$view$set_status("finished")
       private$reported = "ended"
       cli::cli_bullets(c(
         "i" = "The broadcast has ended. The page keeps the last text it showed.",
-        "i" = "Run {.fn livecode::follow} again to follow a new broadcast, {.fn livecode::stop_all} closes the page."
+        " " = "Run {.run livecode::unfollow()} to close the page."
       ))
       invisible()
     },
@@ -540,6 +551,15 @@ register_follower = function(follower) {
   invisible()
 }
 
+# The running follower of this address and port, if there is one.
+find_follower = function(address, port) {
+  for (follower in .globals$followers) {
+    if (follower$follows(address, port))
+      return(follower)
+  }
+  NULL
+}
+
 deregister_follower = function(follower) {
   match = vapply(.globals$followers, identical, logical(1), y = follower)
   .globals$followers = .globals$followers[!match]
@@ -565,7 +585,10 @@ deregister_follower = function(follower) {
 #'   a random free port.
 #'
 #' @details
-#' The page is served on \code{127.0.0.1} only and works while the R
+#' The page is served on \code{127.0.0.1} only, under a random token in its
+#' address without which nothing is served, so only the page that
+#' \code{follow()} opens can read the session, also when an IDE shows it
+#' through a proxy such as Posit Workbench's. It works while the R
 #' session is idle at the console, or while the \pkg{later} event loop
 #' otherwise runs. If the broadcast is interrupted, for example while the
 #' instructor restarts it or the network drops, the page shows that it is
@@ -587,10 +610,23 @@ deregister_follower = function(follower) {
 #' \code{pak::pak("rundel/rtailcat")}, which builds it from source and needs
 #' a Go toolchain.
 #'
+#' Calling \code{follow()} again with an address that is already being
+#' followed does not start a second page: it opens the page of the running
+#' follower and returns that follower. Once the broadcast has ended, or the
+#' follower was stopped, \code{follow()} starts a new one.
+#'
+#' @section Stopping:
+#' Following runs until it is stopped: \code{\link{unfollow}()} stops every
+#' follower of the session, or the one whose page is on a given port, and
+#' \code{$stop()} on the returned object stops that one. Either closes the connection to the broadcast and
+#' the local page's server; the page then says that following has stopped.
+#' \code{follow()} says so when it starts, and again when the broadcast
+#' ends, after which the local page stays up with the last text until it is
+#' stopped. Closing the Viewer or the browser tab does not stop it.
+#'
 #' @return
 #' An invisible \code{LiveCodeFollower} R6 object with \code{$stop()},
-#' \code{$open()}, and \code{$url}. \code{\link{stop_all}} stops followers
-#' too.
+#' \code{$open()}, \code{$url}, and \code{$local_port}.
 #'
 #' @examples
 #' \dontrun{
@@ -598,7 +634,7 @@ deregister_follower = function(follower) {
 #' f$stop()
 #' }
 #'
-#' @seealso \code{\link{serve_file}}
+#' @seealso \code{\link{unfollow}}, \code{\link{serve_file}}
 #'
 #' @export
 follow = function(address, port = 4000, open_browser = TRUE, local_port = NULL) {
@@ -626,11 +662,24 @@ follow = function(address, port = 4000, open_browser = TRUE, local_port = NULL) 
   if (length(port) != 1 || is.na(port) || port < 1L || port > 65535L)
     cli::cli_abort("{.arg port} must be a single port number between 1 and 65535.")
 
-  rtailcat::TailcatClient$new(address)$close()
-  new_client = function() rtailcat::TailcatClient$new(address)
-  follower = lc_follower$new(new_client, port = port, local_port = local_port)
-  register_follower(follower)
-  cli::cli_bullets(c("i" = "Connecting to the broadcast, the page is at {.url {follower$url}}."))
+  follower = find_follower(address, port)
+  if (!is.null(follower)) {
+    cli::cli_bullets(c(
+      "i" = "Already following this broadcast, the page is at {.url {follower$url}}.",
+      " " = "Run {.run livecode::unfollow()} to stop following and close the page's server."
+    ))
+  } else {
+    rtailcat::TailcatClient$new(address)$close()
+    new_client = function() rtailcat::TailcatClient$new(address)
+    follower = lc_follower$new(
+      new_client, port = port, local_port = local_port, address = address
+    )
+    register_follower(follower)
+    cli::cli_bullets(c(
+      "i" = "Connecting to the broadcast, the page is at {.url {follower$url}}.",
+      " " = "Run {.run livecode::unfollow()} to stop following and close the page's server."
+    ))
+  }
 
   # Positron answers the request to show the page only while this call runs.
   if (open_browser && identical(editor_backend(), "positron"))
@@ -639,4 +688,62 @@ follow = function(address, port = 4000, open_browser = TRUE, local_port = NULL) 
     later::later(function() if (follower$is_running()) follower$open(), 0.5)
 
   invisible(follower)
+}
+
+#' Stop following tailcat broadcasts
+#'
+#' @description
+#' Stops followers started with \code{\link{follow}()}: the connection to
+#' the broadcast is closed and so is the server of the local page, which
+#' then says that following has stopped.
+#'
+#' @param port The port of the local page of the follower to stop, the
+#'   number after \code{127.0.0.1:} in the address \code{follow()} printed.
+#'   \code{NULL} (the default) stops every follower of this R session.
+#'
+#' @return
+#' The number of followers stopped, invisibly.
+#'
+#' @examples
+#' \dontrun{
+#' livecode::follow("tc...")
+#' #> Connecting to the broadcast, the page is at <http://127.0.0.1:28664/...>.
+#'
+#' # Stop that one
+#' livecode::unfollow(28664)
+#'
+#' # Stop them all
+#' livecode::unfollow()
+#' }
+#'
+#' @seealso \code{\link{follow}}, \code{\link{stop_all}}
+#'
+#' @export
+unfollow = function(port = NULL) {
+  followers = .globals$followers
+
+  if (!is.null(port)) {
+    if (!is.numeric(port) || length(port) != 1 || is.na(port) || port != trunc(port))
+      cli::cli_abort("{.arg port} must be a single port number, or {.code NULL} to stop every follower.")
+
+    ports = vapply(followers, function(f) f$local_port, integer(1))
+    followers = followers[ports == port]
+    if (length(followers) == 0) {
+      hint = if (length(ports) > 0) {
+        "The pages being followed are on {cli::qty(length(ports))}port{?s} {ports}."
+      } else {
+        "Nothing is being followed."
+      }
+      cli::cli_abort(c("No follower has its page on port {port}.", "i" = hint))
+    }
+  }
+
+  if (length(followers) == 0) {
+    cli::cli_bullets(c("i" = "Not following any broadcast."))
+    return(invisible(0L))
+  }
+
+  for (follower in followers)
+    follower$stop()
+  invisible(length(followers))
 }

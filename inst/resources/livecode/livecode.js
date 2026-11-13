@@ -8,15 +8,18 @@
  *   messages   array of Noty options to show as toasts
  *   interval   seconds until the next update, drawn as a progress circle
  *   status     state of the session, one of the keys of STATUS_TEXT: the
- *              server sends "ended" when it stops, and a tailcat follower's
- *              local server sends the state of its link to the broadcast
+ *              server sends "ended" when it stops. A tailcat follower's
+ *              local server sends the state of its link to the broadcast,
+ *              "finished" when the broadcast was stopped (the follower is
+ *              still running and says how to stop it), and "stopped" when
+ *              the follower itself is stopped
  *   route      how a tailcat follower reaches the broadcast, as
  *              {kind: "direct" | "relay" | "", relay: "<relay region>"}
  *              (sent by a tailcat follower's local server; "" is unknown)
  *
  * The socket reconnects with backoff, and the status bar says so while the
- * page is disconnected. After "ended" the bar says that the session is over
- * instead; the socket is still retried, quietly, so the page picks up again
+ * page is disconnected. After "ended", "finished", or "stopped" the bar says
+ * that the session is over instead; the socket is still retried, quietly, so the page picks up again
  * if the instructor restarts the server.
  *
  * Page options come from data attributes on <body>:
@@ -34,8 +37,12 @@
     connected: "",
     reconnecting: "Disconnected, reconnecting…",
     waiting: "Connecting to the broadcast…",
-    ended: "The session has ended."
+    ended: "The session has ended.",
+    finished: "The session has ended. Run livecode::unfollow() in R to close this page.",
+    stopped: "Stopped following."
   };
+
+  var OVER = { ended: true, finished: true, stopped: true };
 
   var state = {
     view: null,
@@ -66,7 +73,7 @@
   function setStatus(status) {
     var el = document.getElementById("livecode-status");
     if (!el) return;
-    state.ended = status === "ended";
+    state.ended = OVER[status] === true;
     if (state.ended) clearProgress();
     el.setAttribute("data-status", status);
     el.textContent = STATUS_TEXT[status] || "";

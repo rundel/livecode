@@ -20,9 +20,21 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// random_token
+std::string random_token(int bytes);
+RcppExport SEXP _livecode_random_token(SEXP bytesSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< int >::type bytes(bytesSEXP);
+    rcpp_result_gen = Rcpp::wrap(random_token(bytes));
+    return rcpp_result_gen;
+END_RCPP
+}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_livecode_get_ipv4", (DL_FUNC) &_livecode_get_ipv4, 0},
+    {"_livecode_random_token", (DL_FUNC) &_livecode_random_token, 1},
     {NULL, NULL, 0}
 };
 

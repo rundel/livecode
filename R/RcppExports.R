@@ -5,3 +5,7 @@ get_ipv4 <- function() {
     .Call(`_livecode_get_ipv4`)
 }
 
+random_token <- function(bytes = 16L) {
+    .Call(`_livecode_random_token`, bytes)
+}
+
