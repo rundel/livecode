@@ -5,6 +5,5 @@
 ^\.DS_Store$
 ^\.httr-oauth$
 ^LICENSE\.md$
-^README\.qmd$
 ^\.github$
 ^notes$
