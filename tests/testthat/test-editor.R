@@ -606,6 +606,80 @@ test_that("serve_file opens the page later, from the event loop, in RStudio", {
   expect_length(opened$browser, 0)
 })
 
+test_that("in an IDE a server on a network address shows its Viewer a local copy of the page", {
+  f = local_test_file("x = 1")
+  local_editor("rstudio")
+  ed = fake_editor(path = f, id = "ID1")
+  opened = local_page_openers()
+  # Stands in for a network address, which a test machine may not have.
+  local_mocked_bindings(is_ip_loopback = function(ip) FALSE)
+
+  srv = suppressMessages(serve_file(f, ip = "127.0.0.1", interval = 0.1))
+  withr::defer(if (srv$is_running()) suppressMessages(srv$stop()))
+  pump(3, until = function() length(opened$viewer) > 0)
+  local = opened$viewer
+  expect_length(local, 1)
+  expect_length(opened$browser, 0)
+  expect_match(local, "^http://127\\.0\\.0\\.1:[0-9]+/[0-9a-f]{32}/$")
+  expect_false(startsWith(local, srv$url))
+
+  base = sub("^(http://[^/]+)/.*$", "\\1", local)
+  expect_equal(http_get(local)$status_code, 200L)
+  expect_match(rawToChar(http_get(local)$content), "data-message-mode=\"html\"", fixed = TRUE)
+  expect_equal(http_get(paste0(local, "web/livecode/livecode.js"))$status_code, 200L)
+  expect_equal(http_get(paste0(base, "/"))$status_code, 403L)
+  expect_equal(http_get(paste0(base, "/", strrep("0", 32), "/"))$status_code, 403L)
+  expect_equal(http_get(paste0(base, "/web/livecode/livecode.js"))$status_code, 403L)
+
+  # The local page gets what the students' page gets.
+  page = ws_client(local)
+  expect_equal(page$frames[[1]]$content, "x = 1\n")
+  expect_match(page$frames[[1]]$messages[[1]]$text, "Welcome")
+  touch_write(f, "x = 2")
+  ed$ctx$contents = "x = 2"
+  pump(3, until = function() any(startsWith(contents(page), "x = 2")))
+  expect_true(any(startsWith(contents(page), "x = 2")))
+
+  outsider = ws_client(base)
+  expect_length(outsider$frames, 0)
+
+  # The address survives a restart, so an open Viewer finds the server again.
+  suppressMessages(srv$restart())
+  expect_equal(http_get(local)$status_code, 200L)
+  srv$open()
+  expect_equal(opened$viewer, c(local, local))
+
+  suppressMessages(srv$stop())
+  expect_equal(http_get(local, seconds = 2)$status_code, NA)
+})
+
+test_that("the local copy is not used outside an IDE, without the Viewer, or on 127.0.0.1", {
+  f = local_test_file("x = 1")
+  opened = local_page_openers()
+
+  local_editor("rstudio")
+  ed = fake_editor(path = f, id = "ID1")
+  srv = suppressMessages(serve_file(f, ip = "127.0.0.1", open_browser = FALSE))
+  srv$open()
+  expect_equal(opened$viewer, srv$url)
+  suppressMessages(srv$stop())
+
+  local_mocked_bindings(is_ip_loopback = function(ip) FALSE)
+  withr::with_options(list(livecode.viewer = FALSE), {
+    srv = suppressMessages(serve_file(f, ip = "127.0.0.1", open_browser = FALSE))
+    srv$open()
+    expect_equal(opened$browser, srv$url)
+    suppressMessages(srv$stop())
+  })
+
+  local_editor("none")
+  srv = suppressMessages(serve_file(f, ip = "127.0.0.1", open_browser = FALSE))
+  srv$open()
+  expect_equal(opened$browser[2], srv$url)
+  suppressMessages(srv$stop())
+  expect_length(opened$viewer, 1)
+})
+
 test_that("the tests leave no task callback registered", {
   expect_equal(getTaskCallbackNames(), callbacks_at_start)
 })

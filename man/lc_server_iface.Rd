@@ -94,7 +94,10 @@ combined with `ip`.}
 \if{html}{\out{<a id="method-LiveCodeServer_Interface-open"></a>}}
 \if{latex}{\out{\hypertarget{method-LiveCodeServer_Interface-open}{}}}
 \subsection{\code{LiveCodeServer_Interface$open()}}{
-  Open the page in the IDE's Viewer pane, or in the browser.
+  Open the page in the IDE's Viewer pane, or in the browser. In RStudio
+and Positron a server on a network address is shown in the Viewer
+through a copy of the page on `127.0.0.1`, see
+\code{\link{serve_file}}.
   \subsection{Usage}{
     \if{html}{\out{<div class="r">}}
     \preformatted{LiveCodeServer_Interface$open()}

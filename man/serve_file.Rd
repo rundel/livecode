@@ -36,10 +36,9 @@ unsaved text is broadcast anyway; \code{TRUE} is an error in Positron.
 See the section on editors.}
 
 \item{open_browser}{Logical. Should the page be opened automatically: in
-the IDE's Viewer pane when it can show the page, which is always in
-Positron and in RStudio when the page is served on this computer
-(\code{local_only = TRUE}), and otherwise in the system browser. Set
-\code{options(livecode.viewer = FALSE)} to always use the browser.}
+the Viewer pane in RStudio and Positron, and otherwise in the system
+browser. Set \code{options(livecode.viewer = FALSE)} to always use the
+browser. See the section on editors.}
 
 \item{tailcat}{Also broadcast over tailcat, so students anywhere can follow
 with [follow()]: `FALSE` (the default), `TRUE` for a fresh address, or
@@ -120,6 +119,14 @@ IDEs differ in a few ways:
     Positron \code{auto_save = TRUE} is an error; use Positron's own
     auto save setting instead.
 }
+In an IDE your own copy of the page opens in the Viewer pane. The Viewer
+cannot always reach the server's network address: RStudio's shows pages
+of this computer only, and in a Posit Workbench session the browser
+reaches the session through Workbench, not through that address. So the
+server also serves the page on \code{127.0.0.1} for the Viewer, under a
+random token in its address without which nothing is served there.
+Students keep using the network address or the tailcat broadcast.
+
 While \code{serve_file()} blocks, its console is busy, so
 \code{$send_msg()} and the other methods of the server cannot be called
 from that console. Use \code{block = FALSE} if you need them (in Positron

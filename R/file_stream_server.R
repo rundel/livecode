@@ -35,7 +35,26 @@ lc_server = R6::R6Class(
         close_websockets(private$websockets, list(status = "ended"))
         httpuv::stopServer(private$handle)
       }
+      if (!is.null(private$local_handle) && private$local_handle$isRunning())
+        httpuv::stopServer(private$local_handle)
+      private$local_handle = NULL
       invisible(self)
+    },
+
+    # The same page on 127.0.0.1, for the instructor's own IDE: its Viewer
+    # shows pages of this computer only (RStudio), or reaches the session
+    # through a proxy that cannot get to the network address (Posit
+    # Workbench). It lives under a token, as a follower's page does, because
+    # such a proxy's address is shared by every user of the service.
+    serve_locally = function(port, token) {
+      if (!self$is_running())
+        return(NULL)
+      if (is.null(private$local_handle)) {
+        private$local_handle = httpuv::startServer(
+          "127.0.0.1", port, private$local_app(paste0("/", token, "/"))
+        )
+      }
+      paste0("http://127.0.0.1:", port, "/", token, "/")
     },
 
     # The served file, which follows an RStudio document through a rename.
@@ -208,6 +227,7 @@ lc_server = R6::R6Class(
 
   private = list(
     handle = NULL,
+    local_handle = NULL,
     page = NULL,
     file = NULL,
     file_id = NULL,
@@ -315,6 +335,43 @@ lc_server = R6::R6Class(
             ))
           }
         }
+      )
+    },
+
+    # The app again, with everything under `root` and nothing served
+    # outside it. Its websockets join the others, so they get every frame.
+    local_app = function(root) {
+      app = private$app()
+      refuse = function(status, text) {
+        list(
+          status = status,
+          headers = list("Content-Type" = "text/plain; charset=UTF-8"),
+          body = text
+        )
+      }
+      inside = function(req) {
+        path = req[["PATH_INFO"]]
+        is_string(path) && startsWith(path, root)
+      }
+      static = list(pkg_resource("resources"))
+      names(static) = paste0(root, "web")
+
+      list(
+        call = function(req) {
+          if (!inside(req))
+            return(refuse(403L, "Forbidden"))
+          if (!identical(req[["PATH_INFO"]], root))
+            return(refuse(404L, "Not found"))
+          app$call(req)
+        },
+        onWSOpen = function(ws) {
+          if (!inside(ws$request)) {
+            ws$close()
+            return(invisible())
+          }
+          app$onWSOpen(ws)
+        },
+        staticPaths = static
       )
     },
 
@@ -521,6 +578,27 @@ lc_server_iface = R6::R6Class(
     server = NULL,
     sticky_msg = NULL,
     tailcat = NULL,
+    local_page = NULL,
+
+    # The address to show in the IDE's Viewer. A server on a network address
+    # is also served on 127.0.0.1 for it, at a port and token that are kept
+    # through restarts so an open page finds the server again.
+    viewer_url = function() {
+      if (identical(private$editor, "none") || isFALSE(getOption("livecode.viewer", TRUE)) ||
+          is_ip_loopback(private$ip))
+        return(NULL)
+
+      if (is.null(private$local_page)) {
+        private$local_page = list(
+          port = httpuv::randomPort(host = "127.0.0.1"),
+          token = random_token()
+        )
+      }
+      tryCatch(
+        private$server$serve_locally(private$local_page$port, private$local_page$token),
+        error = function(e) NULL
+      )
+    },
 
     attach_tailcat = function() {
       broadcast = private$tailcat
@@ -706,6 +784,10 @@ lc_server_iface = R6::R6Class(
       if (!is.null(private$tailcat))
         private$attach_tailcat()
 
+      # A page already open in the Viewer reconnects to the same address.
+      if (!is.null(private$local_page))
+        private$viewer_url()
+
       name = basename(private$file)
       cli::cli_bullets(c("v" = "Started sharing {.file {name}} at {.url {self$url}}."))
 
@@ -835,12 +917,19 @@ lc_server_iface = R6::R6Class(
     },
 
     #' @description
-    #' Open the page in the IDE's Viewer pane, or in the browser.
+    #' Open the page in the IDE's Viewer pane, or in the browser. In RStudio
+    #' and Positron a server on a network address is shown in the Viewer
+    #' through a copy of the page on `127.0.0.1`, see
+    #' \code{\link{serve_file}}.
     open = function() {
-      if (self$is_running())
+      if (!self$is_running())
+        cli::cli_abort("The server is not currently running!")
+
+      local = private$viewer_url()
+      if (is.null(local))
         editor_show_page(self$url, private$editor)
       else
-        cli::cli_abort("The server is not currently running!")
+        editor_show_page(local, private$editor, local = TRUE)
     },
 
     #' @description
@@ -1116,10 +1205,9 @@ lc_server_iface = R6::R6Class(
 #'   unsaved text is broadcast anyway; \code{TRUE} is an error in Positron.
 #'   See the section on editors.
 #' @param open_browser Logical. Should the page be opened automatically: in
-#'   the IDE's Viewer pane when it can show the page, which is always in
-#'   Positron and in RStudio when the page is served on this computer
-#'   (\code{local_only = TRUE}), and otherwise in the system browser. Set
-#'   \code{options(livecode.viewer = FALSE)} to always use the browser.
+#'   the Viewer pane in RStudio and Positron, and otherwise in the system
+#'   browser. Set \code{options(livecode.viewer = FALSE)} to always use the
+#'   browser. See the section on editors.
 #' @param tailcat Also broadcast over tailcat, so students anywhere can follow
 #'   with [follow()]: `FALSE` (the default), `TRUE` for a fresh address, or
 #'   keys from [tailcat_keys()] for an address posted ahead of time. Needs
@@ -1174,6 +1262,14 @@ lc_server_iface = R6::R6Class(
 #'     Positron \code{auto_save = TRUE} is an error; use Positron's own
 #'     auto save setting instead.
 #' }
+#' In an IDE your own copy of the page opens in the Viewer pane. The Viewer
+#' cannot always reach the server's network address: RStudio's shows pages
+#' of this computer only, and in a Posit Workbench session the browser
+#' reaches the session through Workbench, not through that address. So the
+#' server also serves the page on \code{127.0.0.1} for the Viewer, under a
+#' random token in its address without which nothing is served there.
+#' Students keep using the network address or the tailcat broadcast.
+#'
 #' While \code{serve_file()} blocks, its console is busy, so
 #' \code{$send_msg()} and the other methods of the server cannot be called
 #' from that console. Use \code{block = FALSE} if you need them (in Positron
