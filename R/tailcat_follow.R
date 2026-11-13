@@ -433,7 +433,10 @@ lc_follower = R6::R6Class(
         if (!identical(private$reported, "connected")) {
           private$reported = "connected"
           what = if (nzchar(hello$file)) cli::format_inline("{.file {hello$file}}") else "the broadcast"
-          cli::cli_bullets(c("v" = "Following {what} at {.url {self$url}}."))
+          cli::cli_bullets(c(
+            "v" = "Following {what} at {.url {self$url}}.",
+            " " = "Run {.run livecode::unfollow()} to stop following."
+          ))
         }
         return(invisible())
       }
@@ -620,8 +623,8 @@ deregister_follower = function(follower) {
 #' follower of the session, or the one whose page is on a given port, and
 #' \code{$stop()} on the returned object stops that one. Either closes the connection to the broadcast and
 #' the local page's server; the page then says that following has stopped.
-#' \code{follow()} says so when it starts, and again when the broadcast
-#' ends, after which the local page stays up with the last text until it is
+#' \code{follow()} says so once it is connected, and again when the
+#' broadcast ends, after which the local page stays up with the last text until it is
 #' stopped. Closing the Viewer or the browser tab does not stop it.
 #'
 #' @return
@@ -665,8 +668,8 @@ follow = function(address, port = 4000, open_browser = TRUE, local_port = NULL) 
   follower = find_follower(address, port)
   if (!is.null(follower)) {
     cli::cli_bullets(c(
-      "i" = "Already following this broadcast, the page is at {.url {follower$url}}.",
-      " " = "Run {.run livecode::unfollow()} to stop following and close the page's server."
+      "i" = "Already following this broadcast at {.url {follower$url}}.",
+      " " = "Run {.run livecode::unfollow()} to stop following."
     ))
   } else {
     rtailcat::TailcatClient$new(address)$close()
@@ -675,10 +678,7 @@ follow = function(address, port = 4000, open_browser = TRUE, local_port = NULL) 
       new_client, port = port, local_port = local_port, address = address
     )
     register_follower(follower)
-    cli::cli_bullets(c(
-      "i" = "Connecting to the broadcast, the page is at {.url {follower$url}}.",
-      " " = "Run {.run livecode::unfollow()} to stop following and close the page's server."
-    ))
+    cli::cli_bullets(c("i" = "Connecting to the broadcast\u2026"))
   }
 
   # Positron answers the request to show the page only while this call runs.
@@ -707,7 +707,7 @@ follow = function(address, port = 4000, open_browser = TRUE, local_port = NULL) 
 #' @examples
 #' \dontrun{
 #' livecode::follow("tc...")
-#' #> Connecting to the broadcast, the page is at <http://127.0.0.1:28664/...>.
+#' #> Following 'lecture.R' at <http://127.0.0.1:28664/...>.
 #'
 #' # Stop that one
 #' livecode::unfollow(28664)

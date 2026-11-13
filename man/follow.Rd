@@ -67,8 +67,8 @@ Following runs until it is stopped: \code{\link{unfollow}()} stops every
 follower of the session, or the one whose page is on a given port, and
 \code{$stop()} on the returned object stops that one. Either closes the connection to the broadcast and
 the local page's server; the page then says that following has stopped.
-\code{follow()} says so when it starts, and again when the broadcast
-ends, after which the local page stays up with the last text until it is
+\code{follow()} says so once it is connected, and again when the
+broadcast ends, after which the local page stays up with the last text until it is
 stopped. Closing the Viewer or the browser tab does not stop it.
 }
 

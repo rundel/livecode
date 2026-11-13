@@ -22,7 +22,7 @@ then says that following has stopped.
 \examples{
 \dontrun{
 livecode::follow("tc...")
-#> Connecting to the broadcast, the page is at <http://127.0.0.1:28664/...>.
+#> Following 'lecture.R' at <http://127.0.0.1:28664/...>.
 
 # Stop that one
 livecode::unfollow(28664)
