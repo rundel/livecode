@@ -54,9 +54,9 @@ server$stop()
 
 The server listens on the address of your preferred network interface, which you can inspect (and override with the `ip` argument) using `livecode::network_interfaces()`. Only IPv4 addresses are supported.
 
-The page highlights the file according to its extension (R, Quarto and R Markdown, Python, SQL, and other common languages, with anything else shown as plain text), numbers the lines as they are in the file, and highlights and scrolls to the lines selected in the editor. If the connection drops, for example while the server restarts, the page shows that it is reconnecting and catches up on its own.
+The page highlights the file according to its extension (R, Quarto and R Markdown, Python, SQL, and other common languages, with anything else shown as plain text), numbers the lines as they are in the file, and highlights and scrolls to the lines selected in the editor. A status bar along the bottom of the page shows the state of the connection. If the connection drops, the bar says that the page is reconnecting, and the page catches up on its own. When you stop the server, the bar says that the session has ended instead; the page still picks up again if you restart the server at the same address.
 
-Each viewer can change the code font size and turn off following your cursor or the line highlighting from the gear button in the bottom right corner of the page. These settings only affect that viewer's page and reset to the defaults when the page is reloaded.
+Each viewer can change the code font size and turn off following your cursor or the line highlighting from the gear button in the status bar. These settings only affect that viewer's page and reset to the defaults when the page is reloaded.
 
 ## Editors
 
@@ -85,7 +85,7 @@ The two IDEs differ in a few ways:
 | Formatting on save     | With `auto_save = TRUE`, warns if "Strip trailing horizontal whitespace when saving" is on | livecode never saves                                                                                       |
 | Rename or Save As      | Followed: the renamed document keeps being served                                          | Not followed: the original path stays served                                                               |
 
-The page opens in Positron's Viewer pane, and in the system browser in RStudio and other sessions (`open_browser = FALSE` opens nothing). If RStudio cannot read a document by its id, livecode says so once and reads the served document only while it is active. With `block = FALSE` in Positron, livecode cannot read the editor after startup: the page shows the file on disk with no highlight, so turn on Positron's auto save (`files.autoSave`) if you go that way. `block = TRUE` also works in RStudio and outside an IDE, for example from `Rscript`.
+The page opens in the IDE's Viewer pane when it can be shown there: always in Positron, and in RStudio when the page is served on this computer (`follow()` and `local_only = TRUE`), since RStudio's Viewer does not show pages at a network address. Otherwise, and outside an IDE, it opens in the system browser. Set `options(livecode.viewer = FALSE)` to always use the browser; `open_browser = FALSE` opens nothing. If RStudio cannot read a document by its id, livecode says so once and reads the served document only while it is active. With `block = FALSE` in Positron, livecode cannot read the editor after startup: the page shows the file on disk with no highlight, so turn on Positron's auto save (`files.autoSave`) if you go that way. `block = TRUE` also works in RStudio and outside an IDE, for example from `Rscript`.
 
 While `serve_file()` blocks, its console is busy, so `server$send_msg()` and the other server methods cannot be called from it. If you need them, use `block = FALSE` (in Positron at the cost of the live buffer and highlight).
 
@@ -106,7 +106,9 @@ server = livecode::serve_file("lecture.R", tailcat = TRUE)
 livecode::follow("tc...")
 ```
 
-`follow()` opens a page served by the student's own R session, on 127.0.0.1 only (in Positron's Viewer pane, elsewhere in the system browser), with the same view as the instructor's page: the highlighted file, the selected lines, and messages, which followers see as plain text. The page reconnects by itself if the broadcast drops or restarts. `stop_all()` stops followers too.
+`follow()` opens a page served by the student's own R session, on 127.0.0.1 only (in the Viewer pane of RStudio or Positron, elsewhere in the system browser), with the same view as the instructor's page: the highlighted file, the selected lines, and messages, which followers see as plain text. Its status bar also shows whether the connection to you is direct or goes through a relay. The page reconnects by itself if the broadcast drops. When you stop the broadcast, followers are told that the session has ended and stop reconnecting; to follow a broadcast you start again, they run `follow()` again. `stop_all()` stops followers too.
+
+If the local network address is of no use, or you would rather not show it, add `local_only = TRUE`: the page is then served on 127.0.0.1 only, for your own use, and the tailcat broadcast is the only way in for everyone else. It is only allowed together with `tailcat`.
 
 On a running server, `server$start_tailcat()` and `server$stop_tailcat()` start and stop the broadcast and `server$tailcat_address` gives the address; `server$stop()` stops the broadcast as well. The broadcast runs in a separate R process, so a problem in it cannot take down your session, and it keeps going while your session is busy. It only ever sends: nothing a follower sends is read, followers that fall behind are dropped (they reconnect and catch up), and at most 150 are connected at once (`max_clients`).
 

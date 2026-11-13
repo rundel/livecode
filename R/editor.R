@@ -14,6 +14,7 @@ rs_viewer = function(url) rstudioapi::viewer(url)
 browse_url = function(url) utils::browseURL(url, browser = get_browser())
 platform_gui = function() .Platform$GUI
 positron_env = function() Sys.getenv("POSITRON")
+positron_mode = function() Sys.getenv("POSITRON_MODE")
 
 editor_state = new.env(parent = emptyenv())
 
@@ -237,15 +238,33 @@ editor_read = function(file, id = NULL, backend = editor_backend(), by_id = FALS
   )
 }
 
-# Opens a livecode page. Positron shows the instructor's page in its Viewer
-# pane: rstudioapi::viewer() hands an http URL to a localhost proxy, which
-# reaches the LAN address the server listens on. A local page (follow())
-# checks the Origin of its websocket, which that proxy does not rewrite, so
-# it goes through browseURL(), whose browser option Positron sets to show
-# localhost URLs in the Viewer directly. Both are editor requests, so this
-# must run while a console command does, not from an idle callback.
+# Opens a livecode page, in the IDE's Viewer pane when there is one and
+# else in the system browser. Setting options(livecode.viewer = FALSE) always
+# uses the browser.
+#
+# RStudio's Viewer shows pages of this computer only, which it reaches
+# through Posit Workbench's address when the session runs there, so a page
+# on a network address goes to the browser.
+#
+# Positron's Viewer shows any page through rstudioapi::viewer(), which hands
+# the URL to a proxy. On the desktop that proxy has an origin of its own,
+# which a local page (follow()) refuses for its websocket, so a local page
+# goes through browseURL(), whose browser option Positron sets to show
+# localhost URLs in the Viewer directly. In a Workbench session the proxy is
+# Workbench itself, which the local page accepts, and browseURL() would open
+# a browser tab.
+#
+# These are editor requests, so in Positron this must run while a console
+# command does, not from an idle callback.
 editor_show_page = function(url, backend = editor_backend(), local = FALSE) {
-  if (identical(backend, "positron") && !local) {
+  use_viewer = !isFALSE(getOption("livecode.viewer", TRUE)) && switch(
+    backend,
+    rstudio = is_loopback_url(url),
+    positron = !local || identical(positron_mode(), "server"),
+    FALSE
+  )
+
+  if (use_viewer) {
     shown = tryCatch(
       {
         rs_viewer(url)
@@ -259,6 +278,10 @@ editor_show_page = function(url, backend = editor_backend(), local = FALSE) {
 
   browse_url(url)
   invisible("browser")
+}
+
+is_loopback_url = function(url) {
+  grepl("^https?://(127\\.0\\.0\\.1|localhost)(:[0-9]+)?(/|$)", url)
 }
 
 # Opens file in the editor and waits until it is the active document, so

@@ -9,32 +9,78 @@ body {
   font-size: 16px;
 }
 
-/* The code view is the page and scrolls on its own, so the selection can be
-   followed without moving the toasts or indicators. */
+/* The code view fills the page above the status bar and scrolls on its own,
+   so the selection can be followed without moving the toasts or the bar. */
 #livecode-view {
   position: fixed;
-  inset: 0;
+  inset: 0 0 var(--lc-bar-height) 0;
+}
+
+/* The status bar holds everything that is not code: the connection status
+   on the left, the display settings and the update progress on the right. */
+:root {
+  --lc-bar-height: 26px;
+}
+
+.livecode-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+  box-sizing: border-box;
+  height: var(--lc-bar-height);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border-top: 1px solid #d0d7de;
+  background: #f6f8fa;
+  color: #57606a;
+  font-size: 12px;
+  line-height: 1;
 }
 
 .livecode-status {
-  position: fixed;
-  left: 10px;
-  bottom: 10px;
-  z-index: 1000;
-  padding: 3px 10px;
-  border-radius: 999px;
-  background: rgba(60, 60, 60, 0.85);
-  color: #ffffff;
-  font-size: 13px;
-  pointer-events: none;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.livecode-status[hidden] {
+.livecode-status[data-status="reconnecting"],
+.livecode-status[data-status="waiting"] {
+  color: #9a6700;
+}
+
+.livecode-status[data-status="ended"] {
+  color: #1f2328;
+  font-weight: 600;
+}
+
+/* How a tailcat follower reaches the broadcast: directly, or through a
+   relay. Shown on a follower's page only, once it is known. */
+.livecode-route {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: default;
+}
+
+.livecode-route[hidden],
+.livecode-route[data-route="direct"] .livecode-route-relay,
+.livecode-route[data-route="relay"] .livecode-route-direct {
   display: none;
 }
 
-#progressbar {
-  z-index: 1000;
+.livecode-route[data-route="direct"] {
+  color: #1a7f37;
+}
+
+.livecode-route[data-route="relay"] {
+  color: #9a6700;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -43,41 +89,43 @@ body {
   }
 }
 
-/* Viewer settings: a faint gear in the bottom right, left of the progress
-   circle and clear of the status pill on the left. Code is left aligned, so
-   this corner is the one least likely to hold text, and the view leaves room
-   below the last line so nothing stays under it. */
+.livecode-settings {
+  flex: none;
+  display: flex;
+}
+
 .livecode-settings[hidden],
 .livecode-settings-panel[hidden] {
   display: none;
 }
 
 .livecode-settings-toggle {
-  position: fixed;
-  right: 42px;
-  bottom: 6px;
-  z-index: 1000;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 22px;
+  height: 22px;
   margin: 0;
   padding: 0;
   border: 1px solid transparent;
   border-radius: 50%;
   background: transparent;
-  color: #57606a;
-  opacity: 0.4;
+  color: inherit;
+  opacity: 0.7;
   cursor: pointer;
   transition: opacity 0.15s ease, background-color 0.15s ease;
+}
+
+.livecode-settings-toggle svg {
+  width: 15px;
+  height: 15px;
 }
 
 .livecode-settings-toggle:hover,
 .livecode-settings-toggle:focus-visible,
 .livecode-settings-toggle[aria-expanded="true"] {
   opacity: 1;
-  background: rgba(255, 255, 255, 0.95);
+  background: #ffffff;
   border-color: #d0d7de;
 }
 
@@ -90,7 +138,7 @@ body {
 .livecode-settings-panel {
   position: fixed;
   right: 10px;
-  bottom: 46px;
+  bottom: calc(var(--lc-bar-height) + 6px);
   z-index: 1001;
   box-sizing: border-box;
   max-width: calc(100vw - 20px);
@@ -165,6 +213,17 @@ body {
   .livecode-settings-toggle {
     transition: none;
   }
+}
+
+/* Toasts laid out at the bottom sit above the status bar. */
+#noty_layout__bottom {
+  bottom: var(--lc-bar-height);
+}
+
+#noty_layout__bottomLeft,
+#noty_layout__bottomCenter,
+#noty_layout__bottomRight {
+  bottom: calc(var(--lc-bar-height) + 20px);
 }
 
 .noty_body h1,

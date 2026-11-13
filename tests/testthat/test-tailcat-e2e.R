@@ -87,32 +87,44 @@ test_that("a follower sees the file, its updates, and messages as plain text", {
     expect_equal(file_mode(file.path(dir, "status.json")), "600")
   }
 
-  # Stopping the broadcast leaves the page reconnecting; starting it again
-  # with the same keys brings the follower back with the full state.
+  # The page learns whether the connection is direct or relayed.
+  routes = function() Filter(Negate(is.null), lapply(page$frames, function(x) x$route$kind))
+  pump(30, until = function() any(routes() %in% c("direct", "relay")))
+  expect_true(any(routes() %in% c("direct", "relay")))
+
+  # A broadcast that is cut off, here by killing its process, leaves the
+  # page reconnecting; starting it again with the same keys brings the
+  # follower back with the full state.
   pid = broadcast_of(srv)$worker_pid()
-  suppressMessages(srv$stop_tailcat())
+  tools::pskill(pid, tools::SIGKILL)
+  suppressMessages(pump(60, until = function() identical(last_status(page), "reconnecting")))
   expect_false(worker_alive(pid))
-  expect_false(dir.exists(dir))
-  suppressMessages(pump(30, until = function() identical(last_status(page), "reconnecting")))
   expect_equal(last_status(page), "reconnecting")
   expect_false(fl$is_connected())
 
   touch_write(f, "x = 3")
   suppressMessages(srv$start_tailcat(key = keys))
   expect_true(identical(srv$tailcat_address, address))
-  suppressMessages(pump(60, until = function() fl$is_connected() && "x = 3\n" %in% contents(page)))
+  suppressMessages(pump(90, until = function() fl$is_connected() && "x = 3\n" %in% contents(page)))
   expect_true(fl$is_connected())
   expect_equal(last_status(page), "connected")
   expect_true("x = 3\n" %in% contents(page))
 
-  # Stopping the server stops the broadcast process.
+  # Stopping the server stops the broadcast process, and the follower is
+  # told that the session is over instead of being left to reconnect.
   pid = broadcast_of(srv)$worker_pid()
   suppressMessages({
     srv$stop()
-    pump(1)
+    pump(30, until = function() fl$has_ended())
   })
   expect_false(worker_alive(pid))
+  expect_false(dir.exists(dir))
   expect_null(srv$tailcat_address)
+  expect_true(fl$has_ended())
+  expect_false(fl$is_connected())
+  expect_true(fl$is_running())
+  pump(5, until = function() identical(last_status(page), "ended"))
+  expect_equal(last_status(page), "ended")
 
   suppressMessages(stop_all())
   expect_false(fl$is_running())

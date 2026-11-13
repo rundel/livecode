@@ -13,8 +13,9 @@ with \code{"tc"}, as posted by the instructor.}
 \item{port}{The tailcat port of the broadcast, \code{4000} unless the
 instructor chose another.}
 
-\item{open_browser}{Should the page be opened: in Positron's Viewer pane,
-elsewhere in the system browser.}
+\item{open_browser}{Should the page be opened: in the Viewer pane of
+RStudio or Positron, elsewhere in the system browser. Set
+\code{options(livecode.viewer = FALSE)} to always use the browser.}
 
 \item{local_port}{Port of the local page on \code{127.0.0.1}, by default
 a random free port.}
@@ -36,7 +37,10 @@ session is idle at the console, or while the \pkg{later} event loop
 otherwise runs. If the broadcast is interrupted, for example while the
 instructor restarts it or the network drops, the page shows that it is
 reconnecting and catches up on its own; the connection is retried after
-1 second, then 2, 4, and so on up to 30.
+1 second, then 2, 4, and so on up to 30. When the instructor stops the
+broadcast, the page says that the session has ended, keeps the last text
+it showed, and the connection is not retried; run \code{follow()} again
+to follow a broadcast that is started again.
 
 Everything received is treated as text to display. Nothing is ever run,
 sourced, or saved, the file name is used for display only, and messages

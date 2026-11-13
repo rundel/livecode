@@ -55,8 +55,10 @@ test_that("NUL bytes, invalid UTF-8, and invalid JSON are refused", {
 test_that("the hello is validated and rebuilt", {
   expect_equal(
     tc_validate_hello(list(livecode = 1, file = "lecture.R", lang = "r", interval = 1, extra = "x")),
-    list(file = "lecture.R", lang = "r")
+    list(file = "lecture.R", lang = "r", interval = 1)
   )
+  for (bad in list(0, -1, 1e6, "1", NA_real_, c(1, 2)))
+    expect_null(tc_validate_hello(list(livecode = 1, interval = bad))$interval)
   expect_error(tc_validate_hello(list(content = "x")), class = "livecode_tailcat_protocol")
   expect_error(tc_validate_hello(list(livecode = "1")), class = "livecode_tailcat_protocol")
   expect_error(tc_validate_hello(list(livecode = 2)), class = "livecode_tailcat_version")
@@ -186,4 +188,11 @@ test_that("the broadcast state gives late joiners the full current state", {
   expect_equal(current$content, "b")
   expect_equal(current$selection, "1")
   expect_equal(current$messages[[1]]$text, "Welcome")
+})
+
+test_that("a bye line is told apart from a frame", {
+  expect_true(tc_is_bye(tc_parse(tc_encode(tc_bye()))))
+  expect_false(tc_is_bye(list(bye = "yes")))
+  expect_false(tc_is_bye(list(content = "bye")))
+  expect_equal(tc_validate_frame(tc_bye()), list())
 })

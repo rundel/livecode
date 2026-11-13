@@ -54,7 +54,8 @@ until the broadcast is interrupted or stopped.
   auto_save = FALSE,
   open_browser = TRUE,
   tailcat = FALSE,
-  block = NULL
+  block = NULL,
+  local_only = FALSE
 )}
     \if{html}{\out{</div>}}
   }
@@ -69,8 +70,9 @@ in RStudio or Positron.}
       \item{\code{auto_save}}{should the served document be saved in RStudio at
 each update tick. Not supported in Positron, see
 \code{\link{serve_file}}.}
-      \item{\code{open_browser}}{should the page be opened, in Positron's Viewer
-pane or else in the system browser.}
+      \item{\code{open_browser}}{should the page be opened, in the IDE's Viewer
+pane when it can show the page and else in the system browser, see
+\code{\link{serve_file}}.}
       \item{\code{tailcat}}{also broadcast over tailcat: `FALSE` (the default),
 `TRUE` for a fresh address, or keys from [tailcat_keys()] for an
 address posted ahead of time (see `$start_tailcat()`).}
@@ -79,6 +81,10 @@ it is interrupted or the server is stopped. `NULL` (the default)
 means `TRUE` in Positron and `FALSE` elsewhere, see
 \code{\link{serve_file}}. With `block = TRUE`, `$start()` and
 `$restart()` block too.}
+      \item{\code{local_only}}{should the page be served on this computer only
+(`127.0.0.1`), so there is no network address to share and everyone
+else follows the tailcat broadcast. Needs `tailcat` and cannot be
+combined with `ip`.}
     }
     \if{html}{\out{</div>}}
   }
@@ -88,7 +94,7 @@ means `TRUE` in Positron and `FALSE` elsewhere, see
 \if{html}{\out{<a id="method-LiveCodeServer_Interface-open"></a>}}
 \if{latex}{\out{\hypertarget{method-LiveCodeServer_Interface-open}{}}}
 \subsection{\code{LiveCodeServer_Interface$open()}}{
-  Open the page in the browser, or in Positron's Viewer pane.
+  Open the page in the IDE's Viewer pane, or in the browser.
   \subsection{Usage}{
     \if{html}{\out{<div class="r">}}
     \preformatted{LiveCodeServer_Interface$open()}

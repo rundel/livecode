@@ -1,4 +1,3 @@
-# The RStudio viewer sandboxes websockets, so RStudio uses the system browser.
 get_browser = function() {
   getOption("browser")
 }

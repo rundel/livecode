@@ -10,7 +10,10 @@ follower_view = R6::R6Class(
       if (is.null(port))
         port = httpuv::randomPort(host = host)
       private$port = as.integer(port)
-      private$state = list(file = "", lang = "none", content = "", selection = "", status = "waiting")
+      private$state = list(
+        file = "", lang = "none", content = "", selection = "", status = "waiting",
+        route = tc_route_unknown()
+      )
       private$websockets = new.env(parent = emptyenv())
       private$proxy = workbench_proxy()
       private$handle = httpuv::startServer(host, private$port, private$app())
@@ -35,6 +38,7 @@ follower_view = R6::R6Class(
     set_hello = function(hello) {
       private$state$file = hello$file
       private$state$lang = hello$lang
+      private$interval = hello$interval
       private$send(list(lang = hello$lang))
     },
 
@@ -44,16 +48,27 @@ follower_view = R6::R6Class(
       private$send(frame)
     },
 
+    set_route = function(route) {
+      if (identical(route, private$state$route))
+        return(invisible(self))
+      private$state$route = route
+      private$send(list(route = route))
+    },
+
     set_status = function(status) {
       if (identical(status, private$state$status))
         return(invisible(self))
       private$state$status = status
       private$send(list(status = status))
+      private$beat()
     },
 
     stop = function() {
-      if (self$is_running())
+      if (self$is_running()) {
+        close_websockets(private$websockets, list(status = "ended"))
         httpuv::stopServer(private$handle)
+      }
+      private$beat()
       invisible(self)
     }
   ),
@@ -65,6 +80,25 @@ follower_view = R6::R6Class(
     state = NULL,
     websockets = NULL,
     next_ws_id = 0L,
+    interval = NULL,
+    cancel_beat = NULL,
+
+    # The broadcast sends changes only, so the page's progress circle, which
+    # the instructor's server restarts at every update, is driven from here
+    # at the broadcast's update interval while it is connected.
+    beat = function() {
+      if (!is.null(private$cancel_beat)) {
+        private$cancel_beat()
+        private$cancel_beat = NULL
+      }
+      if (is.null(private$interval) || !self$is_running() ||
+          !identical(private$state$status, "connected"))
+        return(invisible())
+
+      private$send(list(interval = private$interval))
+      private$cancel_beat = later::later(function() private$beat(), private$interval)
+      invisible()
+    },
 
     send = function(frame) {
       json = frame_to_json(frame)
@@ -77,7 +111,7 @@ follower_view = R6::R6Class(
     },
 
     connect_frame = function() {
-      private$state[c("status", "lang", "content", "selection")]
+      private$state[c("status", "lang", "content", "selection", "route")]
     },
 
     # Only this machine's own page may use the server. Checking the Host
@@ -185,8 +219,11 @@ lc_follower = R6::R6Class(
     # Bytes from the broadcast, as the read loop passes them on.
     receive = function(bytes) {
       lines = private$splitter(bytes)
-      for (line in lines)
+      for (line in lines) {
+        if (private$ended)
+          break
         private$handle_line(line)
+      }
       invisible(self)
     },
 
@@ -202,6 +239,12 @@ lc_follower = R6::R6Class(
 
     is_connected = function() {
       !is.null(private$conn) && private$have_hello
+    },
+
+    # TRUE once the broadcast said that it stopped. The page stays up with
+    # the last text it showed, and nothing is dialed any more.
+    has_ended = function() {
+      private$ended
     },
 
     stop = function() {
@@ -226,7 +269,15 @@ lc_follower = R6::R6Class(
     print = function(...) {
       file = private$view$file()
       what = if (nzchar(file)) cli::format_inline("{.file {file}}") else "a broadcast"
-      status = if (!self$is_running()) "stopped" else if (self$is_connected()) "connected" else "reconnecting"
+      status = if (!self$is_running()) {
+        "stopped"
+      } else if (private$ended) {
+        "ended"
+      } else if (self$is_connected()) {
+        "connected"
+      } else {
+        "reconnecting"
+      }
       cli::cli_text("{.strong livecode follower:} {what} @ {.url {self$url}} ({status})")
       invisible(self)
     }
@@ -247,14 +298,51 @@ lc_follower = R6::R6Class(
     dial_timeout = 30,
     gen = 0L,
     stopped = FALSE,
+    ended = FALSE,
     have_hello = FALSE,
     splitter = NULL,
     retry_delay = 1,
     cancel_retry = NULL,
+    cancel_probe = NULL,
     reported = NULL,
 
+    # Asks tailcat, every few seconds while connected, whether the
+    # connection is direct or goes through a relay, for the page to show. A
+    # discovery ping also makes tailcat look for a direct path.
+    probe_route = function(gen) {
+      private$cancel_probe = NULL
+      if (gen != private$gen || is.null(private$client))
+        return(invisible())
+
+      again = function() {
+        if (gen == private$gen) {
+          private$cancel_probe = later::later(
+            function() private$probe_route(gen), tc_path_interval
+          )
+        }
+      }
+      p = tryCatch(
+        private$client$disco_ping_async(timeout = tc_path_timeout),
+        error = function(e) NULL
+      )
+      if (is.null(p)) {
+        again()
+        return(invisible())
+      }
+      promises::then(
+        p,
+        onFulfilled = function(ping) {
+          if (gen == private$gen)
+            private$view$set_route(tc_route(ping))
+          again()
+        },
+        onRejected = function(e) again()
+      )
+      invisible()
+    },
+
     connect = function() {
-      if (private$stopped)
+      if (private$stopped || private$ended)
         return(invisible())
       private$gen = private$gen + 1L
       gen = private$gen
@@ -280,6 +368,7 @@ lc_follower = R6::R6Class(
           private$conn = conn
           self$reset_stream()
           private$read_next(gen)
+          private$probe_route(gen)
         },
         onRejected = function(e) private$disconnected(gen, e)
       )
@@ -314,7 +403,7 @@ lc_follower = R6::R6Class(
               FALSE
             }
           )
-          if (ok)
+          if (ok && gen == private$gen)
             private$read_next(gen)
         },
         onRejected = function(e) private$disconnected(gen, e)
@@ -337,9 +426,53 @@ lc_follower = R6::R6Class(
         }
         return(invisible())
       }
+      if (tc_is_bye(x)) {
+        private$finish()
+        return(invisible())
+      }
       frame = tc_validate_frame(x)
       if (length(frame) > 0)
         private$view$update(frame)
+      invisible()
+    },
+
+    # One line when the broadcast is lost and one more if it then cannot be
+    # reached, instead of a report for every failed attempt.
+    report_outage = function(e) {
+      reason = tc_outage_reason(e)
+      stage = private$reported
+      if (is.null(stage)) {
+        private$reported = "unreachable"
+        cli::cli_bullets(c("!" = "Could not reach the broadcast, retrying: {reason}"))
+      } else if (identical(stage, "connected")) {
+        private$reported = "lost"
+        cli::cli_bullets(c("!" = "Lost the broadcast, reconnecting: {reason}"))
+      } else if (identical(stage, "lost")) {
+        private$reported = "unreachable"
+        cli::cli_bullets(c(
+          "i" = "Still reconnecting: {reason}",
+          " " = "This keeps trying on its own, {.fn livecode::stop_all} stops it."
+        ))
+      }
+      invisible()
+    },
+
+    # The broadcast said goodbye: it was stopped, not cut off, so there is
+    # nothing to reconnect to. A broadcast started again is a new session,
+    # which follow() joins.
+    finish = function() {
+      private$ended = TRUE
+      private$gen = private$gen + 1L
+      if (!is.null(private$cancel_retry))
+        private$cancel_retry()
+      private$close_conn()
+      private$close_client()
+      private$view$set_status("ended")
+      private$reported = "ended"
+      cli::cli_bullets(c(
+        "i" = "The broadcast has ended. The page keeps the last text it showed.",
+        "i" = "Run {.fn livecode::follow} again to follow a new broadcast, {.fn livecode::stop_all} closes the page."
+      ))
       invisible()
     },
 
@@ -355,6 +488,11 @@ lc_follower = R6::R6Class(
         tc_close_quietly(private$conn)
         private$conn = NULL
       }
+      if (!is.null(private$cancel_probe)) {
+        private$cancel_probe()
+        private$cancel_probe = NULL
+      }
+      private$view$set_route(tc_route_unknown())
       private$have_hello = FALSE
     },
 
@@ -368,12 +506,7 @@ lc_follower = R6::R6Class(
       private$close_client()
       private$view$set_status("reconnecting")
 
-      reason = if (is.null(e)) "The broadcast closed the connection." else conditionMessage(e)
-      if (!identical(private$reported, reason)) {
-        private$reported = reason
-        cli::cli_bullets(c("!" = "livecode: lost the broadcast, reconnecting."))
-        cli::cli_bullets(c("i" = "{reason}"))
-      }
+      private$report_outage(e)
 
       delay = private$retry_delay
       private$retry_delay = min(2 * delay, tc_retry_max)
@@ -385,6 +518,22 @@ lc_follower = R6::R6Class(
     }
   )
 )
+
+# Why the broadcast was lost, as one short sentence: the first line of the
+# error, without the advice tailcat adds for someone debugging a server.
+tc_outage_reason = function(e) {
+  if (is.null(e))
+    return("the broadcast closed the connection.")
+  line = strsplit(cli::ansi_strip(conditionMessage(e)), "\n", fixed = TRUE)[[1]]
+  line = trimws(line[nzchar(trimws(line))])
+  if (length(line) == 0)
+    return("the connection failed.")
+  line = line[1]
+  line = paste0(tolower(substr(line, 1, 1)), substr(line, 2, nchar(line)))
+  if (!grepl("[.!?]$", line))
+    line = paste0(line, ".")
+  line
+}
 
 register_follower = function(follower) {
   .globals$followers[[length(.globals$followers) + 1]] = follower
@@ -409,8 +558,9 @@ deregister_follower = function(follower) {
 #'   with \code{"tc"}, as posted by the instructor.
 #' @param port The tailcat port of the broadcast, \code{4000} unless the
 #'   instructor chose another.
-#' @param open_browser Should the page be opened: in Positron's Viewer pane,
-#'   elsewhere in the system browser.
+#' @param open_browser Should the page be opened: in the Viewer pane of
+#'   RStudio or Positron, elsewhere in the system browser. Set
+#'   \code{options(livecode.viewer = FALSE)} to always use the browser.
 #' @param local_port Port of the local page on \code{127.0.0.1}, by default
 #'   a random free port.
 #'
@@ -420,7 +570,10 @@ deregister_follower = function(follower) {
 #' otherwise runs. If the broadcast is interrupted, for example while the
 #' instructor restarts it or the network drops, the page shows that it is
 #' reconnecting and catches up on its own; the connection is retried after
-#' 1 second, then 2, 4, and so on up to 30.
+#' 1 second, then 2, 4, and so on up to 30. When the instructor stops the
+#' broadcast, the page says that the session has ended, keeps the last text
+#' it showed, and the connection is not retried; run \code{follow()} again
+#' to follow a broadcast that is started again.
 #'
 #' Everything received is treated as text to display. Nothing is ever run,
 #' sourced, or saved, the file name is used for display only, and messages

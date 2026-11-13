@@ -7,11 +7,17 @@
  *   selection  instructor's selected lines, such as "3-5,9" ("" clears)
  *   messages   array of Noty options to show as toasts
  *   interval   seconds until the next update, drawn as a progress circle
- *   status     connection status of an upstream link, one of the keys of
- *              STATUS_TEXT (sent by a tailcat follower's local server)
+ *   status     state of the session, one of the keys of STATUS_TEXT: the
+ *              server sends "ended" when it stops, and a tailcat follower's
+ *              local server sends the state of its link to the broadcast
+ *   route      how a tailcat follower reaches the broadcast, as
+ *              {kind: "direct" | "relay" | "", relay: "<relay region>"}
+ *              (sent by a tailcat follower's local server; "" is unknown)
  *
- * The socket reconnects with backoff, and a status indicator says so while
- * the page is disconnected.
+ * The socket reconnects with backoff, and the status bar says so while the
+ * page is disconnected. After "ended" the bar says that the session is over
+ * instead; the socket is still retried, quietly, so the page picks up again
+ * if the instructor restarts the server.
  *
  * Page options come from data attributes on <body>:
  *   data-message-mode  "html" (default) shows message text as HTML, "text"
@@ -27,7 +33,8 @@
     connecting: "",
     connected: "",
     reconnecting: "Disconnected, reconnecting…",
-    waiting: "Connecting to the broadcast…"
+    waiting: "Connecting to the broadcast…",
+    ended: "The session has ended."
   };
 
   var state = {
@@ -35,6 +42,7 @@
     socket: null,
     retryDelay: RECONNECT_MIN_MS,
     retryTimer: null,
+    ended: false,
     options: { messageMode: "html" }
   };
 
@@ -58,10 +66,41 @@
   function setStatus(status) {
     var el = document.getElementById("livecode-status");
     if (!el) return;
-    var text = STATUS_TEXT[status] || "";
+    state.ended = status === "ended";
+    if (state.ended) clearProgress();
     el.setAttribute("data-status", status);
-    el.textContent = text;
-    el.hidden = text === "";
+    el.textContent = STATUS_TEXT[status] || "";
+  }
+
+  // A dropped connection after the session ended is expected, not news.
+  function setDisconnected() {
+    if (!state.ended) setStatus("reconnecting");
+  }
+
+  var ROUTE_TEXT = {
+    direct: ["direct", "Connected directly to the instructor's computer"],
+    relay: ["relay", "Connected through a tailcat relay"]
+  };
+
+  function setRoute(route) {
+    var el = document.getElementById("livecode-route");
+    var label = document.getElementById("livecode-route-label");
+    if (!el || !label) return;
+    var kind = route && typeof route === "object" ? route.kind : "";
+    if (!Object.prototype.hasOwnProperty.call(ROUTE_TEXT, kind)) {
+      el.hidden = true;
+      el.removeAttribute("data-route");
+      return;
+    }
+    var relay = kind === "relay" && typeof route.relay === "string" && /^[A-Za-z0-9-]{1,16}$/.test(route.relay)
+      ? route.relay : "";
+    var text = ROUTE_TEXT[kind][0] + (relay ? " " + relay : "");
+    var title = ROUTE_TEXT[kind][1] + (relay ? " (" + relay + ")" : "");
+    el.setAttribute("data-route", kind);
+    el.setAttribute("title", title);
+    el.setAttribute("aria-label", title);
+    label.textContent = text;
+    el.hidden = false;
   }
 
   function clearProgress() {
@@ -103,6 +142,7 @@
       }
       setStatus(status);
     }],
+    ["route", setRoute],
     ["lang", function (lang) { state.view.setLanguage(lang); }],
     ["content", function (content) {
       if (typeof content !== "string") throw new TypeError("content is not a string");
@@ -122,7 +162,9 @@
         }
       });
     }],
-    ["interval", drawProgress]
+    ["interval", function (interval) {
+      if (!state.ended) drawProgress(interval);
+    }]
   ];
 
   function handleFrame(data) {
@@ -169,7 +211,7 @@
       ws = new WebSocket(socketUrl());
     } catch (err) {
       report("opening the connection", err);
-      setStatus("reconnecting");
+      setDisconnected();
       scheduleReconnect();
       return;
     }
@@ -186,7 +228,8 @@
       if (state.socket !== ws) return;
       state.socket = null;
       clearProgress();
-      setStatus("reconnecting");
+      setRoute(null);
+      setDisconnected();
       scheduleReconnect();
     };
   }

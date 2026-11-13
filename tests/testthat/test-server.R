@@ -169,3 +169,67 @@ test_that("invalid arguments give clear errors", {
   expect_error(serve_file(f, ip = "127.0.0.1", open_browser = FALSE, tunnel = TRUE), "unused argument")
   expect_length(list_servers(), 0)
 })
+
+test_that("stopping the server tells the page that the session has ended", {
+  local_editor("none")
+  f = local_test_file()
+  srv = local_server(f, interval = 10)
+  client = ws_client(srv$url)
+  closed = FALSE
+  client$ws$onClose(function(e) closed <<- TRUE)
+
+  suppressMessages(srv$stop())
+  pump(2, until = function() closed)
+  expect_true(closed)
+  expect_equal(client$frames[[length(client$frames)]], list(status = "ended"))
+})
+
+test_that("local_only serves on 127.0.0.1 and is only allowed with tailcat", {
+  local_editor("none")
+  f = local_test_file()
+
+  expect_error(
+    serve_file(f, local_only = TRUE, open_browser = FALSE),
+    "needs a tailcat broadcast"
+  )
+  expect_error(
+    serve_file(f, local_only = NA, open_browser = FALSE),
+    "local_only"
+  )
+  testthat::local_mocked_bindings(tc_check_installed = function(...) invisible(TRUE))
+  expect_error(
+    serve_file(f, local_only = TRUE, tailcat = TRUE, ip = "127.0.0.1", open_browser = FALSE),
+    "not both"
+  )
+  expect_length(list_servers(), 0)
+})
+
+test_that("a local_only server has no address in its messages", {
+  local_editor("none")
+  f = local_test_file()
+  # The broadcast itself needs the network; the server is what is tested.
+  fake_broadcast = list(new = function(...) list(
+    send = function(frame) invisible(),
+    is_running = function() TRUE,
+    address = function() "tcFAKE",
+    n_clients = function() 0L,
+    stop = function(...) invisible()
+  ))
+  testthat::local_mocked_bindings(
+    tc_check_installed = function(...) invisible(TRUE),
+    tc_broadcast = fake_broadcast
+  )
+
+  expect_message(
+    srv <- serve_file(f, local_only = TRUE, tailcat = TRUE, open_browser = FALSE, interval = 10),
+    "this computer only"
+  )
+  withr::defer(if (srv$is_running()) suppressMessages(srv$stop()))
+  expect_equal(srv$tailcat_address, "tcFAKE")
+  expect_match(srv$url, "^http://127\\.0\\.0\\.1:[0-9]+$")
+
+  client = ws_client(srv$url)
+  welcome = client$frames[[1]]$messages[[1]]$text
+  expect_match(welcome, "Welcome")
+  expect_false(grepl("127.0.0.1", welcome, fixed = TRUE))
+})

@@ -1,7 +1,8 @@
 # Wire protocol of the tailcat broadcast, version 1: newline-delimited JSON
 # over one TCP stream, written by the broadcast and only read by followers.
-# The first line is a hello, every later line a frame. Everything here is
-# pure so it can be tested without a network.
+# The first line is a hello, every later line a frame. A broadcast that is
+# stopped ends with a bye line; a stream that ends without one was cut off.
+# Everything here is pure so it can be tested without a network.
 
 tc_protocol_version = 1L
 tc_default_port = 4000L
@@ -16,6 +17,12 @@ tc_read_timeout = 20
 tc_retry_min = 1
 tc_retry_max = 30
 tc_write_timeout = 5
+# How often a follower asks tailcat which path its connection takes.
+tc_path_interval = 10
+tc_path_timeout = 5
+# Update intervals a follower's page will draw its progress circle for.
+tc_min_interval = 0.1
+tc_max_interval = 3600
 
 tc_message_types = function() {
   c("alert", "success", "error", "warning", "info")
@@ -37,6 +44,31 @@ tc_hello = function(file, lang, interval) {
     lang = lang,
     interval = interval
   )
+}
+
+tc_bye = function() {
+  list(bye = TRUE)
+}
+
+tc_is_bye = function(x) {
+  isTRUE(x[["bye"]])
+}
+
+# The path a follower's connection takes, from a tailcat discovery ping:
+# direct between the two computers, or through one of tailcat's relays.
+tc_route = function(ping) {
+  endpoint = ping[["endpoint"]]
+  if (is_string(endpoint) && nzchar(endpoint))
+    return(list(kind = "direct", relay = ""))
+
+  relay = ping[["relay_region_code"]]
+  if (!is_string(relay) || !grepl("^[A-Za-z0-9-]{1,16}$", relay))
+    relay = ""
+  list(kind = "relay", relay = relay)
+}
+
+tc_route_unknown = function() {
+  list(kind = "", relay = "")
 }
 
 tc_message = function(m) {
@@ -133,7 +165,12 @@ tc_validate_hello = function(x) {
   if (!is_string(lang) || !lang %in% tc_languages())
     lang = "none"
 
-  list(file = file, lang = lang)
+  interval = x[["interval"]]
+  if (!is.numeric(interval) || length(interval) != 1 || is.na(interval) ||
+      interval < tc_min_interval || interval > tc_max_interval)
+    interval = NULL
+
+  list(file = file, lang = lang, interval = interval)
 }
 
 tc_clean_name = function(file) {

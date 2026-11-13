@@ -125,15 +125,16 @@ test_that("a follower relays validated frames and drops everything else", {
     list(messages = list(list(text = "<b>hi</b>", type = "success", layout = "center"))),
     list(ping = TRUE)
   ))
-  pump(0.5, until = function() length(page$frames) >= 5)
+  pump(0.5, until = function() length(page$frames) >= 6)
 
   frames = page$frames[-1]
   expect_equal(frames[[1]], list(lang = "qmd"))
   expect_equal(frames[[2]], list(status = "connected"))
-  expect_equal(frames[[3]], list(content = "x = 1\n", selection = "1"))
-  expect_equal(frames[[4]]$messages[[1]]$text, "<b>hi</b>")
-  expect_equal(frames[[4]]$messages[[1]]$layout, "topRight")
-  expect_length(frames, 4)
+  expect_equal(frames[[3]], list(interval = 1))
+  expect_equal(frames[[4]], list(content = "x = 1\n", selection = "1"))
+  expect_equal(frames[[5]]$messages[[1]]$text, "<b>hi</b>")
+  expect_equal(frames[[5]]$messages[[1]]$layout, "topRight")
+  expect_length(frames, 5)
 
   expect_equal(conn$reads > 0, TRUE)
   expect_length(conn$written, 0)
@@ -178,7 +179,7 @@ test_that("a line over the cap closes the connection and the page shows reconnec
 
   suppressMessages(expect_message(
     pump(5, until = function() conn$closed),
-    "reconnecting"
+    "Could not reach the broadcast, retrying: a line from the broadcast"
   ))
   expect_true(conn$closed)
   pump(0.3)
@@ -243,4 +244,120 @@ test_that("followers are registered and stopped by stop_all", {
   expect_true(client$closed)
   expect_length(.globals$followers, 0)
   expect_equal(http_get(follower$url, seconds = 2)$status_code, NA)
+})
+
+test_that("the page's progress circle is driven at the broadcast's interval while connected", {
+  follower = local_follower(fake_client(list(fake_conn())))
+  pump(0.3)
+  page = origin_client(follower$url, origin = follower$url)
+  beats = function() sum(vapply(page$frames, function(f) identical(f, list(interval = 0.2)), logical(1)))
+
+  suppressMessages(follower$receive(lines_bytes(tc_hello("lecture.R", "r", 0.2))))
+  pump(2, until = function() beats() >= 3)
+  expect_gte(beats(), 3)
+
+  suppressMessages(follower$receive(lines_bytes(tc_bye())))
+  pump(0.3)
+  seen = beats()
+  pump(0.6)
+  expect_equal(beats(), seen)
+})
+
+test_that("a bye ends the session: the page is told, and nothing is dialed again", {
+  conn = fake_conn()
+  client = fake_client(list(conn, fake_conn()))
+  follower = local_follower(client)
+  pump(0.3)
+  page = origin_client(follower$url, origin = follower$url)
+
+  expect_message(
+    follower$receive(c(
+      hello_bytes(),
+      lines_bytes(list(content = "x = 1\n"), tc_bye(), list(content = "after the end"))
+    )),
+    "The broadcast has ended"
+  )
+  expect_true(follower$has_ended())
+  expect_false(follower$is_connected())
+  expect_true(follower$is_running())
+  expect_true(conn$closed)
+  expect_true(client$closed)
+
+  pump(1, until = function() identical(page$frames[[length(page$frames)]], list(status = "ended")))
+  expect_equal(page$frames[[length(page$frames)]], list(status = "ended"))
+  expect_false("after the end" %in% contents(page))
+
+  pump(1.5)
+  expect_equal(client$dials, 1L)
+  expect_false(page$closed)
+
+  late = origin_client(follower$url, origin = follower$url)
+  expect_equal(late$frames[[1]]$status, "ended")
+  expect_equal(late$frames[[1]]$content, "x = 1\n")
+  expect_message(print(follower), "ended")
+})
+
+test_that("stopping a follower tells its page that the session has ended", {
+  follower = local_follower(fake_client(list(fake_conn())))
+  page = origin_client(follower$url, origin = follower$url)
+
+  suppressMessages(follower$stop())
+  pump(1, until = function() page$closed)
+  expect_true(page$closed)
+  expect_equal(page$frames[[length(page$frames)]], list(status = "ended"))
+})
+
+test_that("the route of the connection is read from a discovery ping", {
+  expect_equal(tc_route(list(endpoint = "192.0.2.7:41641", relay_region_code = "nyc")), list(kind = "direct", relay = ""))
+  expect_equal(tc_route(list(endpoint = "", relay_region_code = "nyc")), list(kind = "relay", relay = "nyc"))
+  expect_equal(tc_route(list(endpoint = "", relay_region_code = "<b>x</b>")), list(kind = "relay", relay = ""))
+  expect_equal(tc_route(list()), list(kind = "relay", relay = ""))
+})
+
+test_that("the page is told whether the connection is direct or relayed, until it drops", {
+  conn = fake_conn()
+  client = fake_client(list(conn))
+  client$pings = 0L
+  client$disco_ping_async = function(timeout = 30) {
+    client$pings = client$pings + 1L
+    promises::promise_resolve(list(latency = 0.01, endpoint = "", relay_region_id = 1, relay_region_code = "nyc"))
+  }
+  follower = local_follower(client)
+  pump(1, until = function() client$pings > 0)
+  expect_equal(client$pings, 1L)
+
+  page = origin_client(follower$url, origin = follower$url)
+  expect_equal(page$frames[[1]]$route, list(kind = "relay", relay = "nyc"))
+
+  suppressMessages(follower$receive(c(hello_bytes(), lines_bytes(tc_bye()))))
+  pump(1, until = function() identical(page$frames[[length(page$frames)]], list(status = "ended")))
+  routes = Filter(Negate(is.null), lapply(page$frames[-1], function(f) f$route))
+  expect_equal(routes, list(list(kind = "", relay = "")))
+})
+
+test_that("an outage is reported in one line, and once more if it lasts", {
+  expect_equal(tc_outage_reason(NULL), "the broadcast closed the connection.")
+  timeout = simpleError("Timed out after 30 seconds trying to dial port 4000.\nℹ tailcat: context deadline exceeded\nℹ A server that is offline does not answer.")
+  expect_equal(tc_outage_reason(timeout), "timed out after 30 seconds trying to dial port 4000.")
+  expect_equal(tc_outage_reason(simpleError("")), "the connection failed.")
+
+  first = fake_conn(chunks = list(hello_bytes()), eof = TRUE)
+  client = fake_client(list(first))
+  msgs = character()
+  withCallingHandlers(
+    {
+      follower = lc_follower$new(function() client)
+      withr::defer(suppressMessages(follower$stop()))
+      pump(5, until = function() client$dials >= 3L)
+    },
+    message = function(m) {
+      msgs <<- c(msgs, conditionMessage(m))
+      invokeRestart("muffleMessage")
+    }
+  )
+  expect_gte(client$dials, 3L)
+  msgs = cli::ansi_strip(msgs)
+  expect_equal(sum(grepl("Lost the broadcast, reconnecting: the broadcast closed the connection.", msgs, fixed = TRUE)), 1)
+  expect_equal(sum(grepl("Still reconnecting: no broadcast at this address.", msgs, fixed = TRUE)), 1)
+  expect_equal(sum(grepl("reconnecting", msgs)), 2)
 })

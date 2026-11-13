@@ -553,6 +553,7 @@ local_page_openers = function(viewer = function(url) NULL, env = parent.frame())
 }
 
 test_that("Positron shows the page in the Viewer pane, other backends in the browser", {
+  local_mocked_bindings(positron_mode = function() "desktop")
   opened = local_page_openers()
   expect_equal(editor_show_page("http://192.168.7.46:42244", "positron"), "viewer")
   expect_equal(opened$viewer, "http://192.168.7.46:42244")
@@ -572,6 +573,7 @@ test_that("a failing viewer falls back to the browser", {
 })
 
 test_that("a local page goes through browseURL, which Positron shows in its Viewer", {
+  local_mocked_bindings(positron_mode = function() "desktop")
   opened = local_page_openers()
   expect_equal(editor_show_page("http://127.0.0.1:5000", "positron", local = TRUE), "browser")
   expect_length(opened$viewer, 0)
@@ -590,7 +592,7 @@ test_that("serve_file opens the Viewer before returning in Positron", {
   expect_length(opened$browser, 0)
 })
 
-test_that("serve_file opens the browser later, from the event loop, in RStudio", {
+test_that("serve_file opens the page later, from the event loop, in RStudio", {
   f = local_test_file("x = 1")
   local_editor("rstudio")
   ed = fake_editor(path = f, id = "ID1")
@@ -598,12 +600,41 @@ test_that("serve_file opens the browser later, from the event loop, in RStudio",
 
   srv = suppressMessages(serve_file(f, ip = "127.0.0.1"))
   withr::defer(suppressMessages(srv$stop()))
-  expect_length(opened$browser, 0)
-  pump(3, until = function() length(opened$browser) > 0)
-  expect_equal(opened$browser, srv$url)
   expect_length(opened$viewer, 0)
+  pump(3, until = function() length(opened$viewer) > 0)
+  expect_equal(opened$viewer, srv$url)
+  expect_length(opened$browser, 0)
 })
 
 test_that("the tests leave no task callback registered", {
   expect_equal(getTaskCallbackNames(), callbacks_at_start)
+})
+
+test_that("a local page in a Positron Workbench session is shown in the Viewer", {
+  local_mocked_bindings(positron_mode = function() "server")
+  opened = local_page_openers()
+  expect_equal(editor_show_page("http://127.0.0.1:5000", "positron", local = TRUE), "viewer")
+  expect_equal(opened$viewer, "http://127.0.0.1:5000")
+  expect_length(opened$browser, 0)
+})
+
+test_that("RStudio shows pages of this computer in the Viewer, others in the browser", {
+  opened = local_page_openers()
+  expect_equal(editor_show_page("http://127.0.0.1:5000", "rstudio", local = TRUE), "viewer")
+  expect_equal(editor_show_page("http://localhost:5000/", "rstudio"), "viewer")
+  expect_equal(editor_show_page("http://192.168.7.46:42244", "rstudio"), "browser")
+  expect_equal(editor_show_page("http://127.0.0.1.evil.example:5000", "rstudio"), "browser")
+  expect_length(opened$viewer, 2)
+  expect_length(opened$browser, 2)
+})
+
+test_that("options(livecode.viewer = FALSE) always uses the browser", {
+  withr::local_options(livecode.viewer = FALSE)
+  local_mocked_bindings(positron_mode = function() "server")
+  opened = local_page_openers()
+  expect_equal(editor_show_page("http://192.168.7.46:42244", "positron"), "browser")
+  expect_equal(editor_show_page("http://127.0.0.1:5000", "positron", local = TRUE), "browser")
+  expect_equal(editor_show_page("http://127.0.0.1:5000", "rstudio", local = TRUE), "browser")
+  expect_length(opened$viewer, 0)
+  expect_length(opened$browser, 3)
 })

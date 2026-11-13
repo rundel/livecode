@@ -12,7 +12,8 @@ serve_file(
   auto_save = FALSE,
   open_browser = TRUE,
   tailcat = FALSE,
-  block = NULL
+  block = NULL,
+  local_only = FALSE
 )
 }
 \arguments{
@@ -35,8 +36,10 @@ unsaved text is broadcast anyway; \code{TRUE} is an error in Positron.
 See the section on editors.}
 
 \item{open_browser}{Logical. Should the page be opened automatically: in
-Positron's Viewer pane, or in the system browser in RStudio, outside an
-IDE, and if the Viewer cannot be used.}
+the IDE's Viewer pane when it can show the page, which is always in
+Positron and in RStudio when the page is served on this computer
+(\code{local_only = TRUE}), and otherwise in the system browser. Set
+\code{options(livecode.viewer = FALSE)} to always use the browser.}
 
 \item{tailcat}{Also broadcast over tailcat, so students anywhere can follow
 with [follow()]: `FALSE` (the default), `TRUE` for a fresh address, or
@@ -48,6 +51,11 @@ driving the broadcast from this console, until it is interrupted (Esc
 or Ctrl-C) or the server is stopped. `NULL` (the default) means `TRUE`
 in Positron, which needs it to read the editor, and `FALSE` elsewhere.
 See the section on editors.}
+
+\item{local_only}{Logical. Serve the page on this computer only
+(\code{127.0.0.1}), so there is no network address to share and
+everyone else follows the tailcat broadcast. Only allowed together with
+\code{tailcat}, and not with \code{ip}.}
 }
 \value{
 An invisible \code{LiveCodeServer_Interface} R6 object representing the running
@@ -134,6 +142,10 @@ scrolled into view. The page reconnects by itself if the connection to
 the server drops.
 
 A welcome message is shown to every user when they connect.
+
+When the server stops, the page says that the session has ended instead
+of that it is reconnecting. It still retries quietly, so it picks up
+again if the server is restarted at the same address.
 }
 
 \section{Broadcasting over tailcat}{
@@ -152,6 +164,16 @@ session is busy. It only ever sends; nothing a follower sends is read.
 Followers that fall behind are dropped and reconnect. At most
 \code{max_clients} (150 by default, see \code{$start_tailcat()})
 followers are connected at once.
+
+With \code{local_only = TRUE} the page itself is served on
+\code{127.0.0.1} only, for the instructor's own use, and the tailcat
+broadcast is the only way in for everyone else. Use it on networks where
+the local address would not be reachable anyway, or should not be shared.
+
+When the broadcast is stopped (\code{$stop()}, \code{$stop_tailcat()},
+or interrupting a blocking \code{serve_file()}), followers are told that
+the session has ended and stop reconnecting; to follow a broadcast that
+is started again, they run \code{follow()} again.
 
 Practical points:
 \itemize{

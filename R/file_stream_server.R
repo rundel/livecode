@@ -28,9 +28,13 @@ lc_server = R6::R6Class(
       !is.null(private$handle) && private$handle$isRunning()
     },
 
+    # Pages are told that the session is over before their sockets close, so
+    # they can say so instead of that they are reconnecting.
     stop = function() {
-      if (self$is_running())
+      if (self$is_running()) {
+        close_websockets(private$websockets, list(status = "ended"))
         httpuv::stopServer(private$handle)
+      }
       invisible(self)
     },
 
@@ -370,6 +374,29 @@ frame_to_json = function(frame) {
   jsonlite::toJSON(frame, auto_unbox = TRUE)
 }
 
+# Sends a last frame to every websocket and closes it. httpuv writes from
+# its own thread, so the sockets get a moment to drain before the caller
+# stops the server.
+close_websockets = function(websockets, frame, wait = 0.2) {
+  ids = ls(websockets)
+  if (length(ids) == 0)
+    return(invisible())
+
+  json = frame_to_json(frame)
+  for (ws_id in ids) {
+    ws = websockets[[ws_id]]
+    if (!is.null(ws)) {
+      try(ws$send(json), silent = TRUE)
+      try(ws$close(), silent = TRUE)
+    }
+  }
+
+  deadline = Sys.time() + wait
+  while (length(ls(websockets)) > 0 && Sys.time() < deadline)
+    httpuv::service(20)
+  invisible()
+}
+
 #' Create a low-level livecode file streaming server
 #'
 #' @description
@@ -488,6 +515,7 @@ lc_server_iface = R6::R6Class(
     block = FALSE,
     editor = "none",
     ip = NULL,
+    local_only = FALSE,
     port = NULL,
     interval = NULL,
     server = NULL,
@@ -555,7 +583,26 @@ lc_server_iface = R6::R6Class(
       private$editor = editor
     },
 
-    init_ip = function(ip) {
+    init_ip = function(ip, local_only = FALSE, tailcat = FALSE) {
+      if (!isTRUE(local_only) && !isFALSE(local_only))
+        cli::cli_abort("{.arg local_only} must be {.code TRUE} or {.code FALSE}.")
+
+      if (local_only) {
+        if (isFALSE(tailcat)) {
+          cli::cli_abort(c(
+            "{.code local_only = TRUE} needs a tailcat broadcast.",
+            "i" = "A page on this computer only would reach nobody else: also pass {.code tailcat = TRUE}, or keys from {.fn livecode::tailcat_keys}."
+          ))
+        }
+        if (!is.null(ip)) {
+          cli::cli_abort(
+            "Pass either {.arg ip} or {.code local_only = TRUE}, not both: a local only server always uses {.val 127.0.0.1}."
+          )
+        }
+        ip = "127.0.0.1"
+      }
+      private$local_only = local_only
+
       if (is.null(ip)) {
         ip = network_interfaces()[["ip"]][1]
       }
@@ -608,15 +655,21 @@ lc_server_iface = R6::R6Class(
 
     send_welcome = function() {
       name = basename(self$path)
-      welcome_msg = c(
-        "## Welcome to `livecode`!",
-        "",
-        paste0("Serving `", name, "` at"),
-        "",
-        paste0(
-          "<div class='server_link'><a href='", self$url, "'>", self$url, "</a></div>"
+      # A local only page has no address worth showing: only the instructor
+      # can open it.
+      welcome_msg = if (private$local_only) {
+        c("## Welcome to `livecode`!", "", paste0("Serving `", name, "`"))
+      } else {
+        c(
+          "## Welcome to `livecode`!",
+          "",
+          paste0("Serving `", name, "` at"),
+          "",
+          paste0(
+            "<div class='server_link'><a href='", self$url, "'>", self$url, "</a></div>"
+          )
         )
-      )
+      }
 
       self$send_msg(
         text = welcome_msg, sticky = TRUE,
@@ -656,7 +709,12 @@ lc_server_iface = R6::R6Class(
       name = basename(private$file)
       cli::cli_bullets(c("v" = "Started sharing {.file {name}} at {.url {self$url}}."))
 
-      if (is_ip_private(private$ip)) {
+      if (private$local_only) {
+        cli::cli_bullets(c("i" = paste(
+          "The page is served on this computer only,",
+          "everyone else follows the tailcat broadcast."
+        )))
+      } else if (is_ip_private(private$ip)) {
         cli::cli_bullets(c("!" = paste(
           "The current ip address ({.val {private$ip}}) for the server is private,",
           "only users on the same local network are likely to be able to connect."
@@ -715,13 +773,18 @@ lc_server_iface = R6::R6Class(
     #' @param file Path to file to broadcast, by default the active document
     #'   in RStudio or Positron.
     #' @param ip ip of the server, defaults to the top result of `network_interfaces()`.
+    #' @param local_only should the page be served on this computer only
+    #'   (`127.0.0.1`), so there is no network address to share and everyone
+    #'   else follows the tailcat broadcast. Needs `tailcat` and cannot be
+    #'   combined with `ip`.
     #' @param port port of the server, defaults to a random value.
     #' @param interval page update interval in seconds.
     #' @param auto_save should the served document be saved in RStudio at
     #'   each update tick. Not supported in Positron, see
     #'   \code{\link{serve_file}}.
-    #' @param open_browser should the page be opened, in Positron's Viewer
-    #'   pane or else in the system browser.
+    #' @param open_browser should the page be opened, in the IDE's Viewer
+    #'   pane when it can show the page and else in the system browser, see
+    #'   \code{\link{serve_file}}.
     #' @param tailcat also broadcast over tailcat: `FALSE` (the default),
     #'   `TRUE` for a fresh address, or keys from [tailcat_keys()] for an
     #'   address posted ahead of time (see `$start_tailcat()`).
@@ -732,7 +795,8 @@ lc_server_iface = R6::R6Class(
     #'   `$restart()` block too.
     initialize = function(
       file = NULL, ip = NULL, port = NULL, interval = 1,
-      auto_save = FALSE, open_browser = TRUE, tailcat = FALSE, block = NULL
+      auto_save = FALSE, open_browser = TRUE, tailcat = FALSE, block = NULL,
+      local_only = FALSE
     ) {
       if (!isFALSE(tailcat)) {
         tc_check_installed(tc_broadcast_packages(), "A tailcat broadcast", call = NULL)
@@ -741,7 +805,7 @@ lc_server_iface = R6::R6Class(
       }
 
       private$init_file(file, auto_save, block)
-      private$init_ip(ip)
+      private$init_ip(ip, local_only, tailcat)
       private$init_port(port)
       private$init_interval(interval)
 
@@ -771,7 +835,7 @@ lc_server_iface = R6::R6Class(
     },
 
     #' @description
-    #' Open the page in the browser, or in Positron's Viewer pane.
+    #' Open the page in the IDE's Viewer pane, or in the browser.
     open = function() {
       if (self$is_running())
         editor_show_page(self$url, private$editor)
@@ -1041,6 +1105,10 @@ lc_server_iface = R6::R6Class(
 #' @param ip IPv4 address for the local server. Defaults to the first available
 #'   network interface (see \code{network_interfaces()}).
 #' @param port Port for the local server. Defaults to a random available port.
+#' @param local_only Logical. Serve the page on this computer only
+#'   (\code{127.0.0.1}), so there is no network address to share and
+#'   everyone else follows the tailcat broadcast. Only allowed together with
+#'   \code{tailcat}, and not with \code{ip}.
 #' @param interval Numeric. Update interval in seconds for refreshing content
 #'   and pushing updates to clients.
 #' @param auto_save Logical. Should the served document also be saved at each
@@ -1048,8 +1116,10 @@ lc_server_iface = R6::R6Class(
 #'   unsaved text is broadcast anyway; \code{TRUE} is an error in Positron.
 #'   See the section on editors.
 #' @param open_browser Logical. Should the page be opened automatically: in
-#'   Positron's Viewer pane, or in the system browser in RStudio, outside an
-#'   IDE, and if the Viewer cannot be used.
+#'   the IDE's Viewer pane when it can show the page, which is always in
+#'   Positron and in RStudio when the page is served on this computer
+#'   (\code{local_only = TRUE}), and otherwise in the system browser. Set
+#'   \code{options(livecode.viewer = FALSE)} to always use the browser.
 #' @param tailcat Also broadcast over tailcat, so students anywhere can follow
 #'   with [follow()]: `FALSE` (the default), `TRUE` for a fresh address, or
 #'   keys from [tailcat_keys()] for an address posted ahead of time. Needs
@@ -1127,6 +1197,10 @@ lc_server_iface = R6::R6Class(
 #'
 #' A welcome message is shown to every user when they connect.
 #'
+#' When the server stops, the page says that the session has ended instead
+#' of that it is reconnecting. It still retries quietly, so it picks up
+#' again if the server is restarted at the same address.
+#'
 #' @section Broadcasting over tailcat:
 #' The page is served on the local network only. With \code{tailcat = TRUE}
 #' (or \code{$start_tailcat()} on a running server) the file is also
@@ -1142,6 +1216,16 @@ lc_server_iface = R6::R6Class(
 #' Followers that fall behind are dropped and reconnect. At most
 #' \code{max_clients} (150 by default, see \code{$start_tailcat()})
 #' followers are connected at once.
+#'
+#' With \code{local_only = TRUE} the page itself is served on
+#' \code{127.0.0.1} only, for the instructor's own use, and the tailcat
+#' broadcast is the only way in for everyone else. Use it on networks where
+#' the local address would not be reachable anyway, or should not be shared.
+#'
+#' When the broadcast is stopped (\code{$stop()}, \code{$stop_tailcat()},
+#' or interrupting a blocking \code{serve_file()}), followers are told that
+#' the session has ended and stop reconnecting; to follow a broadcast that
+#' is started again, they run \code{follow()} again.
 #'
 #' Practical points:
 #' \itemize{
@@ -1197,12 +1281,13 @@ serve_file = function(file = NULL,
                       auto_save = FALSE,
                       open_browser = TRUE,
                       tailcat = FALSE,
-                      block = NULL) {
+                      block = NULL,
+                      local_only = FALSE) {
   server = lc_server_iface$new(
     file = file, ip = ip, port = port,
     interval = interval,
     auto_save = auto_save, open_browser = open_browser,
-    tailcat = tailcat, block = block
+    tailcat = tailcat, block = block, local_only = local_only
   )
   invisible(server)
 }

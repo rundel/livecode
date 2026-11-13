@@ -30,8 +30,7 @@
 
 .livecode-view > pre {
   margin: 0;
-  /* Room below the last line so the page's indicators never cover it */
-  padding: 4px 0 44px;
+  padding: 4px 0;
   background: transparent;
   border: 0;
   color: var(--lc-fg);

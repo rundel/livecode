@@ -309,16 +309,20 @@ tailcat_worker_run = function(dir, file, lang, interval, port = tc_default_port,
 
         if (difftime(now, last_check, units = "secs") >= 1) {
           last_check = now
-          if (!dir.exists(dir) || !tc_parent_alive(parent))
-            break
-          if (file.exists(file.path(dir, "stop"))) {
-            # Give the last frames, such as a shutdown message, a moment.
-            final = tc_apply_frames(state, tc_spool_take(dir))
-            if (!is.null(final))
-              hub$send(final)
-            deadline = Sys.time() + 1
-            while (hub$n_pending() > 0 && Sys.time() < deadline)
-              later::run_now(0.05)
+          gone = !dir.exists(dir) || !tc_parent_alive(parent)
+          if (gone || file.exists(file.path(dir, "stop"))) {
+            # Give the last frames, such as a shutdown message, a moment,
+            # then tell the followers that this is the end rather than a
+            # dropped connection.
+            final = if (gone) NULL else tc_apply_frames(state, tc_spool_take(dir))
+            for (line in list(final, tc_encode(tc_bye()))) {
+              if (is.null(line))
+                next
+              hub$send(line)
+              deadline = Sys.time() + 1
+              while (hub$n_pending() > 0 && Sys.time() < deadline)
+                later::run_now(0.05)
+            }
             break
           }
         }
