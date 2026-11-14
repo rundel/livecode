@@ -7,27 +7,14 @@
     <title>{title}</title>
     <base target="_blank">
 
-    <link href="web/progressbar/progressbar.css" rel="stylesheet">
     <link href="web/prism/livecode-code-view.css" rel="stylesheet">
-    <link href="web/noty/noty.css" rel="stylesheet">
-    <link href="web/noty/themes/bootstrap-v3.css" rel="stylesheet">
-    <link href="web/noty/themes/bootstrap-v4.css" rel="stylesheet">
-    <link href="web/noty/themes/light.css" rel="stylesheet">
-    <link href="web/noty/themes/metroui.css" rel="stylesheet">
-    <link href="web/noty/themes/mint.css" rel="stylesheet">
-    <link href="web/noty/themes/nest.css" rel="stylesheet">
-    <link href="web/noty/themes/relax.css" rel="stylesheet">
-    <link href="web/noty/themes/semanticui.css" rel="stylesheet">
-    <link href="web/noty/themes/sunset.css" rel="stylesheet">
     <link href="web/livecode/livecode.css" rel="stylesheet">
 
-    <script src="web/progressbar/progressbar.min.js"></script>
-    <script src="web/noty/noty.min.js"></script>
     {prism_scripts}
     <script src="web/livecode/livecode-settings.js"></script>
     <script src="web/livecode/livecode.js"></script>
   </head>
-  <body data-message-mode="{message_mode}">
+  <body>
     <main id="livecode-view" class="livecode-view" data-language="{lang}" tabindex="0"><pre><code></code></pre></main>
     <footer id="livecode-bar" class="livecode-bar">
       <div id="livecode-status" class="livecode-status" role="status" aria-live="polite"></div>
@@ -70,7 +57,13 @@
           <label><input type="checkbox" id="livecode-highlight" checked> Highlight lines</label>
         </div>
       </div>
-      <div id="progressbar" aria-hidden="true"></div>
+      <div id="progressbar" aria-hidden="true">
+        <svg viewBox="0 0 16 16" width="16" height="16" focusable="false">
+          <circle class="livecode-progress-track" cx="8" cy="8" r="6"/>
+          <circle class="livecode-progress-arc" cx="8" cy="8" r="6" transform="rotate(-90 8 8)"/>
+          <circle class="livecode-progress-dot" cx="8" cy="8" r="2"/>
+        </svg>
+      </div>
     </footer>
   </body>
 </html>

@@ -47,11 +47,7 @@ last_status = function(client) {
   if (length(s) == 0) NA_character_ else s[length(s)]
 }
 
-message_texts = function(client) {
-  unlist(lapply(client$frames, function(f) lapply(f$messages, function(m) m$text)))
-}
-
-test_that("a follower sees the file, its updates, and messages as plain text", {
+test_that("a follower sees the file and its updates", {
   skip_tailcat_e2e()
   f = local_test_file(c("x = 1", "y = x + 1"))
   keys = rtailcat::tailcat_keygen()
@@ -64,15 +60,10 @@ test_that("a follower sees the file, its updates, and messages as plain text", {
   page = ws_client(fl$url)
   expect_equal(page$frames[[1]]$content, "x = 1\ny = x + 1\n")
   expect_equal(page$frames[[1]]$lang, "r")
-  expect_match(rawToChar(http_get(fl$url)$content), "data-message-mode=\"text\"", fixed = TRUE)
 
   touch_write(f, "x = 2")
   pump(15, until = function() "x = 2\n" %in% contents(page))
   expect_true("x = 2\n" %in% contents(page))
-
-  srv$send_msg("**bold** <b>raw</b>", type = "warning")
-  pump(15, until = function() "**bold** <b>raw</b>" %in% message_texts(page))
-  expect_true("**bold** <b>raw</b>" %in% message_texts(page))
 
   # The address never travels in the broadcast, and the files that know it
   # are readable by the owner only.
@@ -189,8 +180,6 @@ test_that("a raw client gets the hello and the full state, and no address", {
   expect_equal(hello$file, basename(f))
   state = tc_parse(lines[2])
   expect_equal(state$content, "secret = 42\n")
-  expect_match(state$messages[[1]]$text, "Welcome")
-  expect_false(grepl("http", state$messages[[1]]$text))
 })
 
 test_that("tailcat_keys gives a stable address and leaves nothing running", {

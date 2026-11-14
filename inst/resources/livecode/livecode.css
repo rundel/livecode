@@ -83,6 +83,49 @@ body {
   color: #9a6700;
 }
 
+/* Time until the next update: an arc that fills a faint ring, with a dot
+   in the center that beats as each update lands. Hidden until the first
+   update and once the session is over. */
+#progressbar {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: #0969da;
+}
+
+#progressbar:not([data-active]) {
+  visibility: hidden;
+}
+
+#progressbar svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.livecode-progress-track,
+.livecode-progress-arc {
+  fill: none;
+  stroke-width: 2;
+}
+
+.livecode-progress-track {
+  stroke: #d0d7de;
+}
+
+.livecode-progress-arc {
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-dasharray: 37.699;
+  stroke-dashoffset: 37.699;
+}
+
+.livecode-progress-dot {
+  fill: currentColor;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
 @media (prefers-reduced-motion: reduce) {
   #progressbar {
     display: none;
@@ -213,42 +256,4 @@ body {
   .livecode-settings-toggle {
     transition: none;
   }
-}
-
-/* Toasts laid out at the bottom sit above the status bar. */
-#noty_layout__bottom {
-  bottom: var(--lc-bar-height);
-}
-
-#noty_layout__bottomLeft,
-#noty_layout__bottomCenter,
-#noty_layout__bottomRight {
-  bottom: calc(var(--lc-bar-height) + 20px);
-}
-
-.noty_body h1,
-.noty_body h2,
-.noty_body h3,
-.noty_body h4,
-.noty_body p {
-  margin-top: 0.5em;
-  margin-bottom: 0.5em;
-}
-
-.noty_body a,
-.noty_body a:visited {
-  color: inherit;
-}
-
-.noty_body .server_link {
-  text-align: center;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.noty_body .server_link a,
-.noty_body .server_link a:visited {
-  font-size: 130%;
-  text-decoration: none;
 }

@@ -161,7 +161,7 @@ follower_view = R6::R6Class(
           list(
             status = 200L,
             headers = list("Content-Type" = "text/html; charset=UTF-8"),
-            body = livecode_page(file, private$state$lang, message_mode = "text")
+            body = livecode_page(file, private$state$lang)
           )
         },
 
@@ -575,7 +575,7 @@ deregister_follower = function(follower) {
 #' Shows a session broadcast with \code{serve_file(tailcat = TRUE)} on a
 #' page served by this R session, from anywhere with an internet
 #' connection. The page looks like the instructor's: the file highlighted,
-#' the lines the instructor selects, and messages.
+#' and the lines the instructor selects.
 #'
 #' @param address The tailcat address of the broadcast, a string starting
 #'   with \code{"tc"}, as posted by the instructor.
@@ -602,8 +602,7 @@ deregister_follower = function(follower) {
 #' to follow a broadcast that is started again.
 #'
 #' Everything received is treated as text to display. Nothing is ever run,
-#' sourced, or saved, the file name is used for display only, and messages
-#' are shown as plain text. Copy code from the page yourself if you want to
+#' sourced, or saved, and the file name is used for display only. Copy code from the page yourself if you want to
 #' run it.
 #'
 #' Anyone can start a broadcast, so only use an address the instructor

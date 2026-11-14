@@ -51,11 +51,8 @@ file_code_language = function(path) {
 }
 
 # The page every client loads. The language is also sent in the connect
-# frame, this only sets the initial value. A follower's page shows messages
-# as plain text (message_mode = "text") because their text comes from
-# another machine.
-livecode_page = function(file, lang = file_code_language(file), message_mode = c("html", "text")) {
-  message_mode = match.arg(message_mode)
+# frame, this only sets the initial value.
+livecode_page = function(file, lang = file_code_language(file)) {
   scripts = paste0(
     "<script src=\"web/", prism_scripts(), "\"></script>",
     collapse = "\n    "
@@ -66,7 +63,6 @@ livecode_page = function(file, lang = file_code_language(file), message_mode = c
     title = html_escape(basename(file)),
     lang = html_escape(lang),
     prism_scripts = scripts,
-    message_mode = message_mode,
     .trim = FALSE
   )
 }

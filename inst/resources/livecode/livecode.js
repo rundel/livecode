@@ -5,8 +5,7 @@
  *   lang       Prism language of the file (sent on connect)
  *   content    the whole file as text ("" clears the view)
  *   selection  instructor's selected lines, such as "3-5,9" ("" clears)
- *   messages   array of Noty options to show as toasts
- *   interval   seconds until the next update, drawn as a progress circle
+ *   interval   seconds until the next update, drawn as a progress ring
  *   status     state of the session, one of the keys of STATUS_TEXT: the
  *              server sends "ended" when it stops. A tailcat follower's
  *              local server sends the state of its link to the broadcast,
@@ -21,10 +20,6 @@
  * page is disconnected. After "ended", "finished", or "stopped" the bar says
  * that the session is over instead; the socket is still retried, quietly, so the page picks up again
  * if the instructor restarts the server.
- *
- * Page options come from data attributes on <body>:
- *   data-message-mode  "html" (default) shows message text as HTML, "text"
- *                      shows it as plain text
  */
 (function () {
   "use strict";
@@ -50,20 +45,11 @@
     retryDelay: RECONNECT_MIN_MS,
     retryTimer: null,
     ended: false,
-    options: { messageMode: "html" }
+    progress: []
   };
 
   function report(what, err) {
     if (window.console && console.error) console.error("livecode: " + what + " failed", err);
-  }
-
-  function escapeHtml(text) {
-    return String(text)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#39;");
   }
 
   function prefersReducedMotion() {
@@ -110,38 +96,45 @@
     el.hidden = false;
   }
 
+  // The ring fills over the time until the next update, easing off to a
+  // dimmer full ring at the end so the restart is not a hard jump, and the
+  // center dot beats as each update lands. A late update leaves the ring
+  // full and dim, which reads as waiting.
+  var RING_LENGTH = 2 * Math.PI * 6;
+
   function clearProgress() {
+    state.progress.forEach(function (animation) { animation.cancel(); });
+    state.progress = [];
     var pb = document.getElementById("progressbar");
-    if (!pb) return;
-    while (pb.lastChild) pb.removeChild(pb.lastChild);
+    if (pb) pb.removeAttribute("data-active");
   }
 
   function drawProgress(interval) {
     clearProgress();
     var pb = document.getElementById("progressbar");
-    if (!pb || !window.ProgressBar || prefersReducedMotion()) return;
     var seconds = Number(interval);
-    if (!(seconds > 0)) return;
-    new window.ProgressBar.Circle(pb, {
-      strokeWidth: 50,
-      easing: "linear",
-      duration: seconds * 1000,
-      color: "#6499D3",
-      svgStyle: null
-    }).animate(1.0);
+    if (!pb || !(seconds > 0) || prefersReducedMotion()) return;
+    var arc = pb.querySelector(".livecode-progress-arc");
+    var dot = pb.querySelector(".livecode-progress-dot");
+    if (!arc || !dot || typeof arc.animate !== "function") return;
+
+    pb.setAttribute("data-active", "");
+    state.progress = [
+      arc.animate([
+        { strokeDashoffset: RING_LENGTH, opacity: 1 },
+        { opacity: 1, offset: 0.8 },
+        { strokeDashoffset: 0, opacity: 0.45 }
+      ], { duration: seconds * 1000, easing: "linear", fill: "forwards" }),
+      dot.animate([
+        { transform: "scale(1)" },
+        { transform: "scale(1.6)", offset: 0.35 },
+        { transform: "scale(1)" }
+      ], { duration: Math.min(450, seconds * 1000), easing: "ease-out" })
+    ];
   }
 
-  function showMessage(msg) {
-    if (!msg || typeof msg !== "object" || !window.Noty) return;
-    var options = {};
-    Object.keys(msg).forEach(function (key) { options[key] = msg[key]; });
-    if (state.options.messageMode === "text") options.text = escapeHtml(msg.text);
-    if (prefersReducedMotion() && !options.animation) options.animation = { open: null, close: null };
-    new window.Noty(options).show();
-  }
-
-  // Applied in this order, each step on its own, so a bad message or option
-  // can never keep the code from updating.
+  // Applied in this order, each step on its own, so a bad field can never
+  // keep the code from updating.
   var STEPS = [
     ["status", function (status) {
       if (typeof status !== "string" || !Object.prototype.hasOwnProperty.call(STATUS_TEXT, status)) {
@@ -158,16 +151,6 @@
     ["selection", function (selection) {
       if (typeof selection !== "string") throw new TypeError("selection is not a string");
       state.view.setSelection(selection);
-    }],
-    ["messages", function (messages) {
-      if (!Array.isArray(messages)) throw new TypeError("messages is not an array");
-      messages.forEach(function (msg) {
-        try {
-          showMessage(msg);
-        } catch (err) {
-          report("message", err);
-        }
-      });
     }],
     ["interval", function (interval) {
       if (!state.ended) drawProgress(interval);
@@ -250,9 +233,6 @@
   }
 
   function start() {
-    var mode = document.body.getAttribute("data-message-mode");
-    if (mode === "text" || mode === "html") state.options.messageMode = mode;
-
     state.view = window.livecodeCodeView.create(document.getElementById("livecode-view"));
     window.livecode = { view: state.view, handleFrame: handleFrame, setStatus: setStatus, settings: null };
 

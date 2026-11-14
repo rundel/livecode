@@ -118,24 +118,19 @@ test_that("spool frames are taken in order and deleted", {
   expect_true(file.exists(file.path(dir, ".tmp-frame-000000000003.json")))
 })
 
-test_that("a sink gets the full state, then every frame, and releases messages", {
+test_that("a sink gets the full state, then every frame", {
   f = local_test_file("x = 1")
   srv = file_stream_server("127.0.0.1", httpuv::randomPort(host = "127.0.0.1"), f, interval = 10)
   on.exit(srv$stop())
 
   got = list()
-  srv$set_sticky_msg(noty_msg$new("<b>hi</b>", plain_text = "hi"), announce = FALSE)
   srv$add_sink("test", function(frame) got[[length(got) + 1]] <<- tc_spool_frame(frame))
   expect_equal(got[[1]]$content, "x = 1\n")
   expect_equal(got[[1]]$selection, "")
-  expect_equal(got[[1]]$sticky$text, "hi")
 
-  srv$add_msg("queued")
   touch_write(f, "x = 2")
   srv$emit(srv$build_frame())
   expect_equal(got[[2]]$content, "x = 2\n")
-  expect_equal(got[[2]]$messages[[1]]$text, "queued")
-  expect_false(srv$have_msgs())
 
   srv$remove_sink("test")
   srv$emit(list(content = "y"))

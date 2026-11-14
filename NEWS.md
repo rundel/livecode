@@ -8,18 +8,18 @@
 * The default update `interval` is now 1 second everywhere.
 * IPv6 addresses are rejected with a clear error instead of producing broken URLs.
 * `file_stream_server()` loses its `template` argument; the unused highlight.js template is gone.
-* Messages now close after 10 seconds by default; pass `timeout = FALSE` to `send_msg()` to keep one open until it is clicked.
 * In an IDE the page shows the editor's text of the served document, unsaved edits included, instead of the file on disk, so `auto_save` now defaults to `FALSE`. It is an RStudio-only option that also saves the document at every update, and `auto_save = TRUE` is an error in Positron.
 * In Positron `serve_file()` now blocks by default (see `block` below) and returns only once the broadcast is interrupted or stopped.
+* Messages are gone: `$send_msg()`, the welcome message, and the `warn` argument of `$stop()` are removed. They could not be used while `serve_file()` blocks, as it does by default in Positron, and the page already says when the session has ended. The markdown package is no longer a dependency.
 
 ## New features
 
-* Positron is supported alongside RStudio: `serve_file()` with no file shares the active document, the page shows its unsaved text, and the editor selection is highlighted while it is the active document. Positron answers requests from R only while a console command runs, so `serve_file()` and `lc_server_iface$new()` gain a `block` argument, `TRUE` by default in Positron and `FALSE` elsewhere: the call keeps running and drives the broadcast from its console until it is interrupted with Esc or Ctrl-C, which stops the server cleanly, while the instructor works in a second R console session. While another tab is active the page keeps the last text seen. With `block = FALSE` in Positron livecode makes no editor calls after startup and serves the file on disk without a highlight. Blocking also works in RStudio and outside an IDE, for example from `Rscript`; while it blocks, `$send_msg()` cannot be called from that console. Renames are not followed in Positron.
+* Positron is supported alongside RStudio: `serve_file()` with no file shares the active document, the page shows its unsaved text, and the editor selection is highlighted while it is the active document. Positron answers requests from R only while a console command runs, so `serve_file()` and `lc_server_iface$new()` gain a `block` argument, `TRUE` by default in Positron and `FALSE` elsewhere: the call keeps running and drives the broadcast from its console until it is interrupted with Esc or Ctrl-C, which stops the server cleanly, while the instructor works in a second R console session. While another tab is active the page keeps the last text seen. With `block = FALSE` in Positron livecode makes no editor calls after startup and serves the file on disk without a highlight. Blocking also works in RStudio and outside an IDE, for example from `Rscript`; while it blocks, the server's methods cannot be called from that console. Renames are not followed in Positron.
 * In Positron, `serve_file()`, `$open()`, and `follow()` open the page in the Viewer pane, falling back to the system browser if the Viewer cannot be used.
-* The page has a status bar along its bottom edge that holds the connection status, the display settings button, and the update progress circle, so none of them sit on top of the code any more.
+* The page has a status bar along its bottom edge that holds the connection status, the display settings button, and the update progress ring, so none of them sit on top of the code any more. The ring fills over the time until the next update and its center dot beats as each update lands.
 * When the server stops, the page says that the session has ended instead of that it is reconnecting. It still retries quietly, so it picks up again if the server is restarted. Followers of a tailcat broadcast are told the same when the broadcast is stopped, and then stop reconnecting: the broadcast now ends with a goodbye, which older versions of `follow()` ignore. A broadcast that is cut off without one is still reconnected to.
 * `serve_file()` and `lc_server_iface$new()` gain `local_only`: with `local_only = TRUE` the page is served on `127.0.0.1` only, so there is no network address to share and everyone else follows the tailcat broadcast. It is only allowed together with `tailcat`.
-* A follower's page shows in its status bar whether its connection to the broadcast is direct or goes through a tailcat relay, and now draws the update progress circle.
+* A follower's page shows in its status bar whether its connection to the broadcast is direct or goes through a tailcat relay, and now draws the update progress ring.
 * Pages open in the Viewer pane in RStudio as well as Positron, for `serve_file()` and for `follow()`. For a server on a network address, which the Viewer cannot always reach (RStudio's shows local pages only, and a Posit Workbench session is reached through Workbench), the instructor's copy of the page is also served on `127.0.0.1`, under a random token in its address. `options(livecode.viewer = FALSE)` always uses the system browser.
 * New `unfollow()` stops the followers of the session, or with `unfollow(port)` the one whose local page is on that port. `follow()` says so once it is connected and when the broadcast ends, as does the page once the session has ended.
 * `follow()` with an address that is already being followed reuses the running follower and its page instead of starting a second local server.
@@ -31,9 +31,8 @@
 * The page reconnects with backoff (1 second, doubling up to 30) after the server restarts or the network drops, and shows a small "reconnecting" indicator meanwhile.
 * The page scrolls the instructor's selection into view, unless the viewer scrolled by hand in the last few seconds.
 * Viewers can change the code font size and turn off following the instructor's cursor or the line highlighting from a settings button on the page. The settings are per page and reset on reload.
-* Sessions can also be broadcast over tailcat with `serve_file(tailcat = TRUE)` or `$start_tailcat()`, and followed from anywhere with `follow("tc...")`, which serves the same page locally. The broadcast runs in a separate R process, only ever sends, drops followers that fall behind, and accepts at most `max_clients` (150) at once. Followers validate and rebuild everything they receive, show messages as plain text, never run or save what they receive, serve the page on 127.0.0.1 only, refuse websockets from other origins, and reconnect with backoff. `tailcat_keys()` creates keys for an address posted ahead of time; use fresh keys for each class meeting. The server gains `$stop_tailcat()` and `$tailcat_address`, and `$send_msg()` a `plain_text` argument for what followers see. This needs the rtailcat package (`pak::pak("rundel/rtailcat")`, built with Go), which is suggested rather than required.
+* Sessions can also be broadcast over tailcat with `serve_file(tailcat = TRUE)` or `$start_tailcat()`, and followed from anywhere with `follow("tc...")`, which serves the same page locally. The broadcast runs in a separate R process, only ever sends, drops followers that fall behind, and accepts at most `max_clients` (150) at once. Followers validate and rebuild everything they receive, never run or save what they receive, serve the page on 127.0.0.1 only, refuse websockets from other origins, and reconnect with backoff. `tailcat_keys()` creates keys for an address posted ahead of time; use fresh keys for each class meeting. The server gains `$stop_tailcat()` and `$tailcat_address`. This needs the rtailcat package (`pak::pak("rundel/rtailcat")`, built with Go), which is suggested rather than required.
 * `stop_all()` also stops followers.
-* `lc_server_iface$new()` sends the welcome message itself, as `serve_file()` did.
 
 ## Bug fixes
 
@@ -44,18 +43,17 @@
 * The update loop starts with the server and keeps running after errors, such as a briefly missing file or no open editor, reporting each error once instead of silently stopping the broadcast.
 * A client connecting between a file change and the next update no longer prevents already connected clients from receiving that change.
 * Line highlighting no longer merges ranges that share a prefix (for example 1-10 became 10), and a selection ending at the start of a line no longer highlights that line.
-* The welcome message is shown to every client when they connect, not only to those connected at the first update. Messages sent while nobody is connected are held until someone connects.
 * Changes are detected by any difference in modification time or size, so a file restored from an older copy is broadcast.
 * `$stop()` no longer sleeps unconditionally and no longer reports success for a server that is not running.
-* Printing a server or message object works again.
+* Printing a server object works again.
 * The page title is the escaped file name rather than the full path.
 * Interface ranking prefers `eth*` and other physical adapters over Docker, VPN, and virtual machine adapters.
 * On Windows, adapters without a unicast address are skipped instead of being dereferenced.
 * Line numbers are the file's real line numbers: leading blank lines and indentation are no longer stripped.
 * Clearing the file clears the page, and the highlight clears when the served file is not the active document.
 * Source text is shown exactly, so `&amp;` or `&lt;-` in a file no longer display as `&` or `<-`.
-* Moving the cursor no longer re-highlights the whole file, and a malformed message can no longer block a content update.
-* The page has a viewport and language set, works on phones, and turns off the progress indicator and toast animations when the viewer prefers reduced motion.
+* Moving the cursor no longer re-highlights the whole file, and a malformed frame can no longer block a content update.
+* The page has a viewport and language set, works on phones, and turns off the progress indicator when the viewer prefers reduced motion.
 
 ## Internal changes
 
@@ -64,4 +62,5 @@
 * The server wraps `httpuv::startServer()` instead of inheriting from httpuv's internal `WebServer` class.
 * Running servers are stopped when the package is unloaded.
 * Added a testthat test suite and a current GitHub Actions check workflow.
-* Unused Prism grammars, plugins, themes and Makefile, Noty source maps and unminified source, and the hex logo PNG are no longer installed.
+* Unused Prism grammars, plugins, themes and Makefile, and the hex logo PNG are no longer installed.
+* The bundled Noty and progressbar.js libraries are removed; the progress ring is drawn with SVG and the Web Animations API.

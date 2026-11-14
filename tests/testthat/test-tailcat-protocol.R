@@ -103,67 +103,20 @@ test_that("frames are validated and rebuilt, unknown fields dropped", {
   expect_equal(tc_validate_frame(list(selection = 3)), list())
 })
 
-test_that("messages keep only text and type and get fixed page options", {
-  frame = tc_validate_frame(list(messages = list(
-    list(text = "<img src=x onerror=alert(1)>", type = "success", layout = "evil", callbacks = "x"),
-    list(text = "hi", type = "bogus"),
-    list(text = c("a", "b")),
-    list(type = "info"),
-    "not an object"
-  )))
-  expect_length(frame$messages, 2)
-  m = frame$messages[[1]]
-  expect_equal(m$text, "<img src=x onerror=alert(1)>")
-  expect_equal(m$type, "success")
-  expect_equal(m$layout, "topRight")
-  expect_setequal(names(m), c("text", "type", "theme", "layout", "timeout", "progressBar"))
-  expect_equal(frame$messages[[2]]$type, "info")
-
-  expect_equal(tc_validate_frame(list(messages = list(a = list(text = "x")))), list())
-  many = rep(list(list(text = "x", type = "info")), 100)
-  expect_length(tc_validate_frame(list(messages = many))$messages, tc_max_messages)
-  long = tc_validate_frame(list(messages = list(list(text = strrep("x", 1e5)))))
-  expect_equal(nchar(long$messages[[1]]$text), tc_max_message_chars)
-})
-
-test_that("spool frames carry each message's plain text and type only", {
-  html = noty_msg$new("<p><strong>hi</strong></p>", type = "success", plain_text = "**hi**")
-  sticky = noty_msg$new("<h2>Welcome</h2>", plain_text = "Welcome")
-  frame = list(
-    interval = 1, lang = "r", content = "x", selection = "2",
-    messages = list(html), sticky = sticky
-  )
-  out = tc_spool_frame(frame)
-  expect_equal(out, list(
-    content = "x", selection = "2",
-    messages = list(list(text = "**hi**", type = "success")),
-    sticky = list(text = "Welcome", type = "alert")
+test_that("frames keep only known fields", {
+  frame = tc_validate_frame(list(
+    content = "x", selection = "1",
+    messages = list(list(text = "<b>hi</b>", type = "success")),
+    sticky = list(text = "Welcome"),
+    eval = "system('touch x')"
   ))
+  expect_equal(frame, list(content = "x", selection = "1"))
+})
+
+test_that("spool frames carry the content and selection only", {
+  frame = list(interval = 1, lang = "r", content = "x", selection = "2")
+  expect_equal(tc_spool_frame(frame), list(content = "x", selection = "2"))
   expect_equal(tc_spool_frame(list(interval = 1)), list())
-})
-
-test_that("send_msg keeps the markdown source as the plain text", {
-  f = local_test_file("x = 1")
-  iface = local_server(f)
-
-  iface$send_msg("**bold** <b>x</b>", type = "warning")
-  inner = iface$.__enclos_env__$private$server
-  msg = inner$get_msgs()[[1]]
-  expect_match(msg$get_text(), "<strong>bold</strong>", fixed = TRUE)
-  expect_equal(msg$get_plain_text(), "**bold** <b>x</b>")
-  expect_equal(msg$get_type(), "warning")
-
-  iface$send_msg(c("a", "b"), plain_text = "plain")
-  expect_equal(inner$get_msgs()[[1]]$get_plain_text(), "plain")
-})
-
-test_that("the welcome message's plain text names the file, not a url", {
-  f = local_test_file("x = 1")
-  srv = local_server(f)
-  sticky = srv$.__enclos_env__$private$sticky_msg
-  expect_match(sticky$get_plain_text(), basename(f), fixed = TRUE)
-  expect_false(grepl("http", sticky$get_plain_text()))
-  expect_false(grepl("<", sticky$get_plain_text(), fixed = TRUE))
 })
 
 test_that("the broadcast state gives late joiners the full current state", {
@@ -171,13 +124,13 @@ test_that("the broadcast state gives late joiners the full current state", {
   hello = tc_hello("lecture.R", "r", 1)
 
   line = tc_apply_frames(state, list(
-    list(content = "a", sticky = list(text = "Welcome", type = "info")),
-    list(selection = "1", messages = list(list(text = "hi", type = "info")))
+    list(content = "a"),
+    list(selection = "1")
   ))
   sent = jsonlite::fromJSON(line, simplifyVector = FALSE)
   expect_equal(sent$content, "a")
   expect_equal(sent$selection, "1")
-  expect_equal(vapply(sent$messages, function(m) m$text, ""), c("Welcome", "hi"))
+  expect_setequal(names(sent), c("content", "selection"))
   expect_null(tc_apply_frames(state, list(list(), list())))
 
   tc_apply_frames(state, list(list(content = "b")))
@@ -187,7 +140,6 @@ test_that("the broadcast state gives late joiners the full current state", {
   current = jsonlite::fromJSON(lines[2], simplifyVector = FALSE)
   expect_equal(current$content, "b")
   expect_equal(current$selection, "1")
-  expect_equal(current$messages[[1]]$text, "Welcome")
 })
 
 test_that("a bye line is told apart from a frame", {

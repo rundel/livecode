@@ -11,7 +11,7 @@ livecode is an R package that lets you broadcast a local R (or any other text) d
 
 <br/>
 
-![The livecode page: the file with syntax highlighting, the selected lines highlighted, a welcome message, and a status bar along the bottom](man/figures/livecode.png)
+![The livecode page: the file with syntax highlighting, the selected lines highlighted, and a status bar along the bottom](man/figures/livecode.png)
 
 ## Installation
 
@@ -35,10 +35,6 @@ server = livecode::serve_file()
 # Or share a specific file from any R session
 server = livecode::serve_file("example.R")
 
-# Once started, send messages to your users.
-server$send_msg("Hello World!", type = "success")
-server$send_msg("Oh no!\n\n Something bad has happened.", type = "error")
-
 # Once finished, shut the server down.
 server$stop()
 #> ✔ Stopped server at <http://192.168.1.128:30000>.
@@ -48,7 +44,7 @@ The server listens on the address of your preferred network interface, which you
 
 ## The page
 
-The page highlights the file according to its extension (R, Quarto and R Markdown, Python, SQL, and other common languages, with anything else shown as plain text), numbers the lines as they are in the file, and highlights and scrolls to the lines selected in the editor. Messages sent with `server$send_msg()` appear as notifications in a corner of the page.
+The page highlights the file according to its extension (R, Quarto and R Markdown, Python, SQL, and other common languages, with anything else shown as plain text), numbers the lines as they are in the file, and highlights and scrolls to the lines selected in the editor. A ring in the status bar counts down to the next update.
 
 A status bar along the bottom holds everything that is not code:
 
@@ -98,7 +94,7 @@ A few more details:
 - The Viewer cannot always reach the server's network address: RStudio's shows pages of this computer only, and in a Posit Workbench session your browser reaches the session through Workbench. So in an IDE the server also serves your copy of the page on 127.0.0.1, under a random token in its address without which nothing is served there. Students keep using the network address or the tailcat broadcast.
 - If RStudio cannot read a document by its id, livecode says so once and reads the served document only while it is active.
 - With `block = FALSE` in Positron, livecode cannot read the editor after startup: the page shows the file on disk with no highlight, so turn on Positron's auto save (`files.autoSave`) if you go that way. `block = TRUE` also works in RStudio and outside an IDE, for example from `Rscript`.
-- While `serve_file()` blocks, its console is busy, so `server$send_msg()` and the other server methods cannot be called from it. If you need them, use `block = FALSE` (in Positron at the cost of the live buffer and highlight).
+- While `serve_file()` blocks, its console is busy, so `server$stop()` and the other server methods cannot be called from it. If you need them, use `block = FALSE` (in Positron at the cost of the live buffer and highlight).
 - The IDE is detected automatically; set `options(livecode.editor = "none")` (or `"rstudio"`, `"positron"`) to override it.
 
 ## Broadcasting over tailcat
@@ -123,7 +119,7 @@ livecode::follow("tc...")
 
 ### For students
 
-`follow()` opens a page served by the student's own R session, in the Viewer pane of RStudio or Positron and elsewhere in the system browser. It shows what your page shows: the highlighted file, the selected lines, and your messages, which followers see as plain text. Its status bar also says whether the connection to you is direct or goes through a relay.
+`follow()` opens a page served by the student's own R session, in the Viewer pane of RStudio or Positron and elsewhere in the system browser. It shows what your page shows: the highlighted file and the selected lines. Its status bar also says whether the connection to you is direct or goes through a relay.
 
 - The page is served on 127.0.0.1 only, under a random token in its address without which nothing is served, so only the page that `follow()` opened can read the session. This also holds when an IDE shows the page through a proxy, as Posit Workbench does.
 - `follow()` only ever displays what it receives; it never runs or saves it.

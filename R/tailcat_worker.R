@@ -131,7 +131,6 @@ tc_state = function() {
   state = new.env(parent = emptyenv())
   state$content = ""
   state$selection = ""
-  state$sticky = NULL
   state
 }
 
@@ -139,7 +138,6 @@ tc_state = function() {
 # connected followers, or NULL when there is nothing to send.
 tc_apply_frames = function(state, frames) {
   out = list()
-  msgs = list()
   for (f in frames) {
     if (!is.null(f[["content"]])) {
       state$content = f[["content"]]
@@ -149,14 +147,7 @@ tc_apply_frames = function(state, frames) {
       state$selection = f[["selection"]]
       out[["selection"]] = f[["selection"]]
     }
-    msgs = c(msgs, f[["messages"]])
-    if (!is.null(f[["sticky"]])) {
-      state$sticky = f[["sticky"]]
-      msgs = c(msgs, list(f[["sticky"]]))
-    }
   }
-  if (length(msgs) > 0)
-    out[["messages"]] = msgs
   if (length(out) == 0)
     return(NULL)
   tc_encode(out)
@@ -166,8 +157,6 @@ tc_apply_frames = function(state, frames) {
 # connected or reconnected.
 tc_greeting = function(hello, state) {
   frame = list(content = state$content, selection = state$selection)
-  if (!is.null(state$sticky))
-    frame[["messages"]] = list(state$sticky)
   paste0(tc_encode(hello), tc_encode(frame))
 }
 

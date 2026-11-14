@@ -62,7 +62,6 @@ server. This object provides methods such as:
 \itemize{
   \item \code{$stop()} to stop the server
   \item \code{$restart()} to restart the server
-  \item \code{$send_msg()} to send messages to connected clients
   \item \code{$start_tailcat()}, \code{$stop_tailcat()}, and
     \code{$tailcat_address} for the tailcat broadcast
 }
@@ -82,7 +81,6 @@ including:
   \item The text of the file, taken from the editor (unsaved edits
     included) when it can be read and from the file on disk otherwise
   \item The lines selected in the editor
-  \item Messages sent via \code{send_msg()}
 }
 }
 \section{Editors}{
@@ -128,7 +126,7 @@ random token in its address without which nothing is served there.
 Students keep using the network address or the tailcat broadcast.
 
 While \code{serve_file()} blocks, its console is busy, so
-\code{$send_msg()} and the other methods of the server cannot be called
+\code{$stop()} and the other methods of the server cannot be called
 from that console. Use \code{block = FALSE} if you need them (in Positron
 at the cost of reading the file from disk).
 
@@ -147,8 +145,6 @@ Makefiles. Other files are shown as plain text. Line numbers match the
 source file, and the lines selected in the editor are highlighted and
 scrolled into view. The page reconnects by itself if the connection to
 the server drops.
-
-A welcome message is shown to every user when they connect.
 
 When the server stops, the page says that the session has ended instead
 of that it is reconnecting. It still retries quietly, so it picks up
@@ -195,8 +191,6 @@ Practical points:
     who ever had an address can use it for as long as its keys are used.
   \item Students need the rtailcat package, which is not on CRAN and
     needs a Go toolchain to build (\code{pak::pak("rundel/rtailcat")}).
-  \item Followers see messages as plain text (see the \code{plain_text}
-    argument of \code{$send_msg()}).
   \item Do a dry run in the room before relying on it. If the network
     keeps devices apart, traffic goes through the public relays, which
     are rate limited and have no uptime guarantee.
@@ -207,8 +201,6 @@ Practical points:
 \dontrun{
 # RStudio, or any R session with block = FALSE: returns straight away
 srv = serve_file("script.R", block = FALSE)
-
-srv$send_msg("Hello, everyone!", type = "success")
 
 srv$stop()
 

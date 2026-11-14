@@ -91,34 +91,6 @@ lc_server = R6::R6Class(
       length(private$sinks) > 0
     },
 
-    have_msgs = function() {
-      length(private$msg_queue) > 0
-    },
-
-    get_msgs = function() {
-      msgs = private$msg_queue
-      private$msg_queue = list()
-      msgs
-    },
-
-    add_msg = function(m) {
-      m = as_noty_msg(m)
-      private$msg_queue = append(private$msg_queue, m)
-      invisible(self)
-    },
-
-    # A sticky message goes to the clients connected now and to every client
-    # that connects later, so it is never queued.
-    set_sticky_msg = function(m, announce = TRUE) {
-      private$sticky_msg = if (is.null(m)) NULL else as_noty_msg(m)
-
-      if (announce && !is.null(private$sticky_msg)) {
-        self$emit(list(interval = private$interval, sticky = private$sticky_msg))
-      }
-
-      invisible(self)
-    },
-
     # Everything a newly connected client needs to match the clients that
     # are already connected.
     connect_frame = function() {
@@ -131,9 +103,6 @@ lc_server = R6::R6Class(
       if (!is.null(private$state[["selection"]]))
         frame[["selection"]] = private$state[["selection"]]
 
-      if (!is.null(private$sticky_msg))
-        frame[["messages"]] = list(private$sticky_msg)
-
       frame
     },
 
@@ -142,8 +111,7 @@ lc_server = R6::R6Class(
       list(
         interval = private$interval,
         content = private$state[["content"]],
-        selection = if (is.null(private$state[["selection"]])) "" else private$state[["selection"]],
-        sticky = private$sticky_msg
+        selection = if (is.null(private$state[["selection"]])) "" else private$state[["selection"]]
       )
     },
 
@@ -166,12 +134,6 @@ lc_server = R6::R6Class(
         private$state[["selection"]] = selection
       }
 
-      # Queued messages wait until someone is connected to see them. A
-      # sink, such as the tailcat broadcast, counts as someone.
-      if ((self$n_clients() > 0 || self$has_sinks()) && self$have_msgs()) {
-        frame[["messages"]] = self$get_msgs()
-      }
-
       frame
     },
 
@@ -179,7 +141,7 @@ lc_server = R6::R6Class(
       if (self$n_clients() == 0)
         return(invisible(self))
 
-      json = frame_to_json(ws_frame(frame))
+      json = frame_to_json(frame)
       for (ws_id in ls(private$websockets)) {
         ws = private$websockets[[ws_id]]
         if (!is.null(ws))
@@ -245,8 +207,6 @@ lc_server = R6::R6Class(
     websockets = NULL,
     sinks = NULL,
     next_ws_id = 0L,
-    msg_queue = list(),
-    sticky_msg = NULL,
     errors = list(),
     selection = NULL,
 
@@ -397,7 +357,7 @@ lc_server = R6::R6Class(
               rm(list = ws_id, envir = private$websockets)
           })
 
-          ws$send(frame_to_json(ws_frame(self$connect_frame())))
+          ws$send(frame_to_json(self$connect_frame()))
         },
 
         staticPaths = list(
@@ -407,25 +367,6 @@ lc_server = R6::R6Class(
     }
   )
 )
-
-as_noty_msg = function(m) {
-  if (is.character(m) && length(m) == 1)
-    m = noty_msg$new(m)
-
-  if (!inherits(m, "noty_msg"))
-    cli::cli_abort("Invalid message type, must either be a character or {.cls noty_msg} object.")
-
-  m
-}
-
-# Frames carry noty_msg objects; the page gets their noty options. A sticky
-# message is shown like any other.
-ws_frame = function(frame) {
-  msgs = c(frame[["messages"]], if (!is.null(frame[["sticky"]])) list(frame[["sticky"]]))
-  frame[["sticky"]] = NULL
-  frame[["messages"]] = if (length(msgs) > 0) lapply(msgs, function(m) m$get_msg())
-  frame
-}
 
 frame_to_json = function(frame) {
   jsonlite::toJSON(frame, auto_unbox = TRUE)
@@ -462,8 +403,8 @@ close_websockets = function(websockets, frame, wait = 0.2) {
 #' browsers.
 #'
 #' The server hosts an HTML page, serves supporting static assets, and maintains
-#' WebSocket connections to all connected clients. File changes, editor cursor
-#' selections, and queued messages are pushed to clients at a fixed interval.
+#' WebSocket connections to all connected clients. File changes and editor
+#' cursor selections are pushed to clients at a fixed interval.
 #'
 #' This function is primarily an internal constructor used by
 #' \code{\link{serve_file}} and \code{LiveCodeServer_Interface}.
@@ -492,7 +433,6 @@ close_websockets = function(websockets, frame, wait = 0.2) {
 #'     edits included, when it can be read, and otherwise the file on disk,
 #'     tracked with \code{\link{file_cache}}. Content is sent only when it
 #'     differs from what was last broadcast.
-#'   \item Pushes queued messages from the server message queue.
 #'   \item In RStudio, reads the served document by id on every tick, so its
 #'     buffer is broadcast while another tab is active and it is followed
 #'     through a rename or Save As. If the editor cannot read a document by
@@ -520,15 +460,14 @@ close_websockets = function(websockets, frame, wait = 0.2) {
 #'
 #' \itemize{
 #'   \item \code{content}: updated file contents
-#'   \item \code{messages}: queued notifications
 #'   \item \code{selection}: highlighted line selection, such as
 #'     \code{"3-5,9"}, or \code{""} to clear it
 #'   \item \code{interval}: refresh interval
 #'   \item \code{lang}: the Prism language of the file (connect frame only)
 #' }
 #'
-#' A newly connected client receives the current broadcast state (content,
-#' selection, and any sticky message) straight away.
+#' A newly connected client receives the current broadcast state (content
+#' and selection) straight away.
 #'
 #' @return
 #' A \code{LiveCodeServer} R6 object.
@@ -556,10 +495,9 @@ file_stream_server = function(host, port, file, file_id = NULL, interval = 1,
 #' @description
 #' This is a high level, user facing interface class that allows
 #' for the creation of a livecode server sharing a specific file.
-#' The interface also provides additional tools for sending messages.
-#' \code{\link{serve_file}} is a wrapper around \code{$new()}, which also
-#' sends the welcome message and, with \code{block = TRUE}, keeps running
-#' until the broadcast is interrupted or stopped.
+#' \code{\link{serve_file}} is a wrapper around \code{$new()}, which with
+#' \code{block = TRUE} keeps running until the broadcast is interrupted or
+#' stopped.
 #'
 #' @export
 lc_server_iface = R6::R6Class(
@@ -576,7 +514,6 @@ lc_server_iface = R6::R6Class(
     port = NULL,
     interval = NULL,
     server = NULL,
-    sticky_msg = NULL,
     tailcat = NULL,
     local_page = NULL,
 
@@ -731,30 +668,6 @@ lc_server_iface = R6::R6Class(
       editor_notes(private$editor, private$auto_save, private$block)
     },
 
-    send_welcome = function() {
-      name = basename(self$path)
-      # A local only page has no address worth showing: only the instructor
-      # can open it.
-      welcome_msg = if (private$local_only) {
-        c("## Welcome to `livecode`!", "", paste0("Serving `", name, "`"))
-      } else {
-        c(
-          "## Welcome to `livecode`!",
-          "",
-          paste0("Serving `", name, "` at"),
-          "",
-          paste0(
-            "<div class='server_link'><a href='", self$url, "'>", self$url, "</a></div>"
-          )
-        )
-      }
-
-      self$send_msg(
-        text = welcome_msg, sticky = TRUE,
-        plain_text = paste0("Welcome to livecode! Following ", name, ".")
-      )
-    },
-
     start_server = function() {
       if (self$is_running()) {
         cli::cli_bullets(c("i" = "The server is already running at {.url {self$url}}."))
@@ -777,9 +690,6 @@ lc_server_iface = R6::R6Class(
           )
         }
       )
-
-      if (!is.null(private$sticky_msg))
-        private$server$set_sticky_msg(private$sticky_msg, announce = FALSE)
 
       if (!is.null(private$tailcat))
         private$attach_tailcat()
@@ -904,7 +814,6 @@ lc_server_iface = R6::R6Class(
       }
 
       private$init_editor_notes()
-      private$send_welcome()
 
       # Positron answers the viewer request only while this call runs.
       if (open_browser && identical(private$editor, "positron"))
@@ -949,72 +858,6 @@ lc_server_iface = R6::R6Class(
     },
 
     #' @description
-    #' Send a noty message to all connected users on the next update tick.
-    #' Messages queued while nobody is connected are held until someone
-    #' connects.
-    #'
-    #' @param text text of the message.
-    #' @param type message type (`alert`, `success`, `warning`, `error`, `info`).
-    #' @param theme message theme, one of `mint`, `sunset`, `relax`, `nest`,
-    #'   `metroui`, `semanticui`, `light`, `bootstrap-v3`, `bootstrap-v4`
-    #'   (See [here](https://ned.im/noty/#/themes) for examples).
-    #' @param layout message location.
-    #' @param ... additional noty arguments, for example `timeout`, the time
-    #'   in milliseconds before the message closes (10000 by default, `FALSE`
-    #'   keeps it open until it is clicked).
-    #' @param parse_md should message text be processed as markdown before sending.
-    #' @param sticky should the message also be shown to every user who
-    #'   connects later. Only one sticky message is kept, a new one replaces it.
-    #' @param plain_text the text shown to tailcat followers, whose page shows
-    #'   messages as plain text rather than HTML. Defaults to `text` as
-    #'   written, before any markdown processing.
-    send_msg = function(text,
-                        type = "info",
-                        theme = "bootstrap-v4",
-                        layout = "topRight",
-                        ...,
-                        parse_md = TRUE,
-                        sticky = FALSE,
-                        plain_text = NULL) {
-      if (is.null(plain_text))
-        plain_text = text
-      plain_text = paste(plain_text, collapse = "\n")
-
-      if (parse_md) {
-        text = markdown::markdownToHTML(
-          text = text,
-          fragment.only = TRUE
-        )
-      } else {
-        text = paste(text, collapse = "\n")
-      }
-
-      args = c(
-        list(text = text, type = type, theme = theme, layout = layout),
-        list(...),
-        list(plain_text = plain_text)
-      )
-
-      text_has_link = grepl("<a ", text)
-      closeWith_used = "closeWith" %in% names(args)
-
-      if (text_has_link && !closeWith_used)
-        args[["closeWith"]] = list("button")
-
-      msg = do.call(noty_msg$new, args)
-
-      if (sticky) {
-        private$sticky_msg = msg
-        if (!is.null(private$server))
-          private$server$set_sticky_msg(msg)
-      } else if (!is.null(private$server)) {
-        private$server$add_msg(msg)
-      }
-
-      invisible(self)
-    },
-
-    #' @description
     #' Determine if the server is running.
     #' @return Returns `TRUE` if the server is running.
     is_running = function() {
@@ -1032,27 +875,14 @@ lc_server_iface = R6::R6Class(
     },
 
     #' @description
-    #' Stop the server
-    #'
-    #' @param warn Should the users be sent a warning that the server is shutting down.
-    stop = function(warn = FALSE) {
+    #' Stop the server. Connected pages say that the session has ended.
+    stop = function() {
       if (!self$is_running()) {
         if (!is.null(private$tailcat))
           self$stop_tailcat()
         deregister_server(self)
         cli::cli_bullets(c("i" = "The server at {.url {self$url}} is not running."))
         return(invisible(self))
-      }
-
-      if (warn && (private$server$n_clients() > 0 || private$server$has_sinks())) {
-        msg = noty_msg$new("Server is shutting down!", type = "error")
-        private$server$emit(list(
-          interval = private$interval,
-          messages = list(msg)
-        ))
-        # httpuv writes from its own thread, give it a moment before the
-        # sockets are closed.
-        Sys.sleep(0.5)
       }
 
       private$stop_server()
@@ -1226,7 +1056,6 @@ lc_server_iface = R6::R6Class(
 #'   \item The text of the file, taken from the editor (unsaved edits
 #'     included) when it can be read and from the file on disk otherwise
 #'   \item The lines selected in the editor
-#'   \item Messages sent via \code{send_msg()}
 #' }
 #'
 #' @section Editors:
@@ -1271,7 +1100,7 @@ lc_server_iface = R6::R6Class(
 #' Students keep using the network address or the tailcat broadcast.
 #'
 #' While \code{serve_file()} blocks, its console is busy, so
-#' \code{$send_msg()} and the other methods of the server cannot be called
+#' \code{$stop()} and the other methods of the server cannot be called
 #' from that console. Use \code{block = FALSE} if you need them (in Positron
 #' at the cost of reading the file from disk).
 #'
@@ -1290,8 +1119,6 @@ lc_server_iface = R6::R6Class(
 #' source file, and the lines selected in the editor are highlighted and
 #' scrolled into view. The page reconnects by itself if the connection to
 #' the server drops.
-#'
-#' A welcome message is shown to every user when they connect.
 #'
 #' When the server stops, the page says that the session has ended instead
 #' of that it is reconnecting. It still retries quietly, so it picks up
@@ -1336,8 +1163,6 @@ lc_server_iface = R6::R6Class(
 #'     who ever had an address can use it for as long as its keys are used.
 #'   \item Students need the rtailcat package, which is not on CRAN and
 #'     needs a Go toolchain to build (\code{pak::pak("rundel/rtailcat")}).
-#'   \item Followers see messages as plain text (see the \code{plain_text}
-#'     argument of \code{$send_msg()}).
 #'   \item Do a dry run in the room before relying on it. If the network
 #'     keeps devices apart, traffic goes through the public relays, which
 #'     are rate limited and have no uptime guarantee.
@@ -1349,7 +1174,6 @@ lc_server_iface = R6::R6Class(
 #' \itemize{
 #'   \item \code{$stop()} to stop the server
 #'   \item \code{$restart()} to restart the server
-#'   \item \code{$send_msg()} to send messages to connected clients
 #'   \item \code{$start_tailcat()}, \code{$stop_tailcat()}, and
 #'     \code{$tailcat_address} for the tailcat broadcast
 #' }
@@ -1360,8 +1184,6 @@ lc_server_iface = R6::R6Class(
 #' \dontrun{
 #' # RStudio, or any R session with block = FALSE: returns straight away
 #' srv = serve_file("script.R", block = FALSE)
-#'
-#' srv$send_msg("Hello, everyone!", type = "success")
 #'
 #' srv$stop()
 #'

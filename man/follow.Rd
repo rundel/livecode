@@ -28,7 +28,7 @@ An invisible \code{LiveCodeFollower} R6 object with \code{$stop()},
 Shows a session broadcast with \code{serve_file(tailcat = TRUE)} on a
 page served by this R session, from anywhere with an internet
 connection. The page looks like the instructor's: the file highlighted,
-the lines the instructor selects, and messages.
+and the lines the instructor selects.
 }
 \details{
 The page is served on \code{127.0.0.1} only, under a random token in its
@@ -45,8 +45,7 @@ it showed, and the connection is not retried; run \code{follow()} again
 to follow a broadcast that is started again.
 
 Everything received is treated as text to display. Nothing is ever run,
-sourced, or saved, the file name is used for display only, and messages
-are shown as plain text. Copy code from the page yourself if you want to
+sourced, or saved, and the file name is used for display only. Copy code from the page yourself if you want to
 run it.
 
 Anyone can start a broadcast, so only use an address the instructor

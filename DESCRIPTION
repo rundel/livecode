@@ -17,7 +17,6 @@ Imports:
     httpuv,
     jsonlite,
     later,
-    markdown,
     R6,
     Rcpp,
     readr,

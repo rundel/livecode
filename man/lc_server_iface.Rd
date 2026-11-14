@@ -6,10 +6,9 @@
 \description{
 This is a high level, user facing interface class that allows
 for the creation of a livecode server sharing a specific file.
-The interface also provides additional tools for sending messages.
-\code{\link{serve_file}} is a wrapper around \code{$new()}, which also
-sends the welcome message and, with \code{block = TRUE}, keeps running
-until the broadcast is interrupted or stopped.
+\code{\link{serve_file}} is a wrapper around \code{$new()}, which with
+\code{block = TRUE} keeps running until the broadcast is interrupted or
+stopped.
 }
 \section{Active bindings}{
   \if{html}{\out{<div class="r6-active-bindings">}}
@@ -30,7 +29,6 @@ until the broadcast is interrupted or stopped.
     \item \href{#method-LiveCodeServer_Interface-initialize}{\code{LiveCodeServer_Interface$new()}}
     \item \href{#method-LiveCodeServer_Interface-open}{\code{LiveCodeServer_Interface$open()}}
     \item \href{#method-LiveCodeServer_Interface-print}{\code{LiveCodeServer_Interface$print()}}
-    \item \href{#method-LiveCodeServer_Interface-send_msg}{\code{LiveCodeServer_Interface$send_msg()}}
     \item \href{#method-LiveCodeServer_Interface-is_running}{\code{LiveCodeServer_Interface$is_running()}}
     \item \href{#method-LiveCodeServer_Interface-start}{\code{LiveCodeServer_Interface$start()}}
     \item \href{#method-LiveCodeServer_Interface-stop}{\code{LiveCodeServer_Interface$stop()}}
@@ -125,50 +123,6 @@ through a copy of the page on `127.0.0.1`, see
 }
 
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-LiveCodeServer_Interface-send_msg"></a>}}
-\if{latex}{\out{\hypertarget{method-LiveCodeServer_Interface-send_msg}{}}}
-\subsection{\code{LiveCodeServer_Interface$send_msg()}}{
-  Send a noty message to all connected users on the next update tick.
-Messages queued while nobody is connected are held until someone
-connects.
-  \subsection{Usage}{
-    \if{html}{\out{<div class="r">}}
-    \preformatted{LiveCodeServer_Interface$send_msg(
-  text,
-  type = "info",
-  theme = "bootstrap-v4",
-  layout = "topRight",
-  ...,
-  parse_md = TRUE,
-  sticky = FALSE,
-  plain_text = NULL
-)}
-    \if{html}{\out{</div>}}
-  }
-  \subsection{Arguments}{
-    \if{html}{\out{<div class="arguments">}}
-    \describe{
-      \item{\code{text}}{text of the message.}
-      \item{\code{type}}{message type (`alert`, `success`, `warning`, `error`, `info`).}
-      \item{\code{theme}}{message theme, one of `mint`, `sunset`, `relax`, `nest`,
-`metroui`, `semanticui`, `light`, `bootstrap-v3`, `bootstrap-v4`
-(See [here](https://ned.im/noty/#/themes) for examples).}
-      \item{\code{layout}}{message location.}
-      \item{\code{...}}{additional noty arguments, for example `timeout`, the time
-in milliseconds before the message closes (10000 by default, `FALSE`
-keeps it open until it is clicked).}
-      \item{\code{parse_md}}{should message text be processed as markdown before sending.}
-      \item{\code{sticky}}{should the message also be shown to every user who
-connects later. Only one sticky message is kept, a new one replaces it.}
-      \item{\code{plain_text}}{the text shown to tailcat followers, whose page shows
-messages as plain text rather than HTML. Defaults to `text` as
-written, before any markdown processing.}
-    }
-    \if{html}{\out{</div>}}
-  }
-}
-
-\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-LiveCodeServer_Interface-is_running"></a>}}
 \if{latex}{\out{\hypertarget{method-LiveCodeServer_Interface-is_running}{}}}
 \subsection{\code{LiveCodeServer_Interface$is_running()}}{
@@ -200,17 +154,10 @@ until it is interrupted or the server is stopped.
 \if{html}{\out{<a id="method-LiveCodeServer_Interface-stop"></a>}}
 \if{latex}{\out{\hypertarget{method-LiveCodeServer_Interface-stop}{}}}
 \subsection{\code{LiveCodeServer_Interface$stop()}}{
-  Stop the server
+  Stop the server. Connected pages say that the session has ended.
   \subsection{Usage}{
     \if{html}{\out{<div class="r">}}
-    \preformatted{LiveCodeServer_Interface$stop(warn = FALSE)}
-    \if{html}{\out{</div>}}
-  }
-  \subsection{Arguments}{
-    \if{html}{\out{<div class="arguments">}}
-    \describe{
-      \item{\code{warn}}{Should the users be sent a warning that the server is shutting down.}
-    }
+    \preformatted{LiveCodeServer_Interface$stop()}
     \if{html}{\out{</div>}}
   }
 }

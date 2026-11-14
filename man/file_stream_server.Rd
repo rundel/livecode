@@ -44,8 +44,8 @@ Creates and returns a low-level HTTP/WebSocket server used by
 browsers.
 
 The server hosts an HTML page, serves supporting static assets, and maintains
-WebSocket connections to all connected clients. File changes, editor cursor
-selections, and queued messages are pushed to clients at a fixed interval.
+WebSocket connections to all connected clients. File changes and editor
+cursor selections are pushed to clients at a fixed interval.
 
 This function is primarily an internal constructor used by
 \code{\link{serve_file}} and \code{LiveCodeServer_Interface}.
@@ -60,7 +60,6 @@ The server performs the following tasks:
     edits included, when it can be read, and otherwise the file on disk,
     tracked with \code{\link{file_cache}}. Content is sent only when it
     differs from what was last broadcast.
-  \item Pushes queued messages from the server message queue.
   \item In RStudio, reads the served document by id on every tick, so its
     buffer is broadcast while another tab is active and it is followed
     through a rename or Save As. If the editor cannot read a document by
@@ -88,15 +87,14 @@ of:
 
 \itemize{
   \item \code{content}: updated file contents
-  \item \code{messages}: queued notifications
   \item \code{selection}: highlighted line selection, such as
     \code{"3-5,9"}, or \code{""} to clear it
   \item \code{interval}: refresh interval
   \item \code{lang}: the Prism language of the file (connect frame only)
 }
 
-A newly connected client receives the current broadcast state (content,
-selection, and any sticky message) straight away.
+A newly connected client receives the current broadcast state (content
+and selection) straight away.
 }
 \seealso{
 \code{\link{serve_file}},

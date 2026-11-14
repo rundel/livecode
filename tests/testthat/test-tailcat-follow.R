@@ -25,7 +25,7 @@ view_base = function(view) {
   sub("^(http://[^/]+)/.*$", "\\1", view$url())
 }
 
-test_that("the local page is served on 127.0.0.1 in plain-text message mode", {
+test_that("the local page is served on 127.0.0.1", {
   view = follower_view$new()
   on.exit(view$stop())
   expect_match(view$url(), "^http://127\\.0\\.0\\.1:[0-9]+/[0-9a-f]{32}/$")
@@ -33,14 +33,11 @@ test_that("the local page is served on 127.0.0.1 in plain-text message mode", {
   res = http_get(view$url())
   expect_equal(res$status_code, 200L)
   page = rawToChar(res$content)
-  expect_match(page, "data-message-mode=\"text\"", fixed = TRUE)
+  expect_match(page, "id=\"livecode-view\"", fixed = TRUE)
   expect_match(page, "<meta name=\"referrer\" content=\"no-referrer\">", fixed = TRUE)
 
   # The page's files are found next to it, under the token.
   expect_equal(http_get(paste0(view$url(), "web/livecode/livecode.js"))$status_code, 200L)
-
-  instructor = livecode_page("a.R")
-  expect_match(instructor, "data-message-mode=\"html\"", fixed = TRUE)
 })
 
 test_that("the local page is not reachable on other interfaces", {
@@ -133,16 +130,14 @@ test_that("a follower relays validated frames and drops everything else", {
     list(messages = list(list(text = "<b>hi</b>", type = "success", layout = "center"))),
     list(ping = TRUE)
   ))
-  pump(0.5, until = function() length(page$frames) >= 6)
+  pump(0.5, until = function() length(page$frames) >= 5)
 
   frames = page$frames[-1]
   expect_equal(frames[[1]], list(lang = "qmd"))
   expect_equal(frames[[2]], list(status = "connected"))
   expect_equal(frames[[3]], list(interval = 1))
   expect_equal(frames[[4]], list(content = "x = 1\n", selection = "1"))
-  expect_equal(frames[[5]]$messages[[1]]$text, "<b>hi</b>")
-  expect_equal(frames[[5]]$messages[[1]]$layout, "topRight")
-  expect_length(frames, 5)
+  expect_length(frames, 4)
 
   expect_equal(conn$reads > 0, TRUE)
   expect_length(conn$written, 0)
@@ -173,7 +168,7 @@ test_that("received content is shown, never run or written", {
   funs = c(
     lc_follower$public_methods, lc_follower$private_methods,
     follower_view$public_methods, follower_view$private_methods,
-    list(tc_line_splitter, tc_line_text, tc_parse, tc_validate_hello, tc_validate_frame, tc_validate_message, tc_clean_name)
+    list(tc_line_splitter, tc_line_text, tc_parse, tc_validate_hello, tc_validate_frame, tc_clean_name)
   )
   used = unique(unlist(lapply(funs, function(f) called_functions(body(f)))))
   expect_equal(intersect(used, forbidden), character())

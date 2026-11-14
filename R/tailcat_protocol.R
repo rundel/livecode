@@ -7,8 +7,6 @@
 tc_protocol_version = 1L
 tc_default_port = 4000L
 tc_max_line_bytes = 5 * 1024^2
-tc_max_messages = 20L
-tc_max_message_chars = 10000L
 tc_max_selection_chars = 10000L
 tc_ping_interval = 5
 # Several ping intervals, so a quiet but live link is never mistaken for a
@@ -23,10 +21,6 @@ tc_path_timeout = 5
 # Update intervals a follower's page will draw its progress circle for.
 tc_min_interval = 0.1
 tc_max_interval = 3600
-
-tc_message_types = function() {
-  c("alert", "success", "error", "warning", "info")
-}
 
 # Every language the bundled Prism can highlight, plus plain text.
 tc_languages = function() {
@@ -71,22 +65,14 @@ tc_route_unknown = function() {
   list(kind = "", relay = "")
 }
 
-tc_message = function(m) {
-  list(text = m$get_plain_text(), type = m$get_type())
-}
-
-# The parent's frames carry noty_msg objects; the broadcast sends only each
-# message's plain text and type, so a follower never receives HTML.
+# The broadcast sends only the content and the selection of the parent's
+# frames.
 tc_spool_frame = function(frame) {
   out = list()
   for (field in c("content", "selection")) {
     if (!is.null(frame[[field]]))
       out[[field]] = frame[[field]]
   }
-  if (length(frame[["messages"]]) > 0)
-    out[["messages"]] = lapply(frame[["messages"]], tc_message)
-  if (!is.null(frame[["sticky"]]))
-    out[["sticky"]] = tc_message(frame[["sticky"]])
   out
 }
 
@@ -195,31 +181,5 @@ tc_validate_frame = function(x) {
       grepl("^[0-9,-]*$", selection))
     out[["selection"]] = selection
 
-  messages = x[["messages"]]
-  if (is.list(messages) && is.null(names(messages))) {
-    msgs = lapply(utils::head(messages, tc_max_messages), tc_validate_message)
-    msgs = Filter(Negate(is.null), msgs)
-    if (length(msgs) > 0)
-      out[["messages"]] = msgs
-  }
-
   out
-}
-
-# Rebuilt as the options of a page notification. The follower page shows
-# the text as plain text.
-tc_validate_message = function(m) {
-  if (!is.list(m) || !is_string(m[["text"]]))
-    return(NULL)
-  type = m[["type"]]
-  if (!is_string(type) || !type %in% tc_message_types())
-    type = "info"
-  list(
-    text = substr(m[["text"]], 1, tc_max_message_chars),
-    type = type,
-    theme = "bootstrap-v4",
-    layout = "topRight",
-    timeout = 10000,
-    progressBar = FALSE
-  )
 }

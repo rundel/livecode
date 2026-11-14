@@ -29,14 +29,14 @@ test_that("the page title is the escaped basename", {
   expect_match(page, "<title>a&lt;b&gt;&amp;c.R</title>", fixed = TRUE)
 })
 
-test_that("clients get the content and the welcome message on connect", {
+test_that("clients get the content on connect", {
   f = local_test_file("x = 1")
   srv = local_server(f)
 
   client = ws_client(srv$url)
   first = client$frames[[1]]
   expect_equal(first$content, "x = 1\n")
-  expect_match(first$messages[[1]]$text, "Welcome")
+  expect_setequal(names(first), c("interval", "lang", "content"))
 })
 
 test_that("a late joiner does not swallow an update for existing clients", {
@@ -67,16 +67,6 @@ test_that("the frame records broadcast state separately from the cache", {
   expect_equal(srv$build_frame()$content, "x = 2\n")
   expect_null(srv$build_frame()$content)
   expect_equal(srv$connect_frame()$content, "x = 2\n")
-})
-
-test_that("messages are held until a client is connected", {
-  f = local_test_file("x = 1")
-  srv = file_stream_server("127.0.0.1", httpuv::randomPort(host = "127.0.0.1"), f, interval = 10)
-  on.exit(srv$stop())
-
-  srv$add_msg("hello")
-  expect_null(srv$build_frame()$messages)
-  expect_true(srv$have_msgs())
 })
 
 test_that("the tick survives a deleted file and keeps running", {
@@ -146,17 +136,14 @@ test_that("restart serves again on the same url", {
   expect_length(list_servers(), 1)
 })
 
-test_that("stop with warn sends a shutdown message", {
+test_that("stop tells connected pages that the session has ended", {
   f = local_test_file("x = 1")
   srv = local_server(f)
   client = ws_client(srv$url)
 
-  suppressMessages(srv$stop(warn = TRUE))
-  pump(1, until = function() {
-    any(vapply(client$frames, function(fr) any(grepl("shutting down", unlist(fr$messages))), logical(1)))
-  })
-  texts = unlist(lapply(client$frames, function(fr) fr$messages))
-  expect_true(any(grepl("shutting down", texts)))
+  suppressMessages(srv$stop())
+  pump(1, until = function() "ended" %in% unlist(lapply(client$frames, function(fr) fr$status)))
+  expect_true("ended" %in% unlist(lapply(client$frames, function(fr) fr$status)))
 })
 
 test_that("invalid arguments give clear errors", {
@@ -204,7 +191,7 @@ test_that("local_only serves on 127.0.0.1 and is only allowed with tailcat", {
   expect_length(list_servers(), 0)
 })
 
-test_that("a local_only server has no address in its messages", {
+test_that("a local_only server is served on 127.0.0.1 only", {
   local_editor("none")
   f = local_test_file()
   # The broadcast itself needs the network; the server is what is tested.
@@ -229,7 +216,5 @@ test_that("a local_only server has no address in its messages", {
   expect_match(srv$url, "^http://127\\.0\\.0\\.1:[0-9]+$")
 
   client = ws_client(srv$url)
-  welcome = client$frames[[1]]$messages[[1]]$text
-  expect_match(welcome, "Welcome")
-  expect_false(grepl("127.0.0.1", welcome, fixed = TRUE))
+  expect_equal(client$frames[[1]]$content, readr::read_file(f))
 })

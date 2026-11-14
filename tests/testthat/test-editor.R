@@ -625,7 +625,7 @@ test_that("in an IDE a server on a network address shows its Viewer a local copy
 
   base = sub("^(http://[^/]+)/.*$", "\\1", local)
   expect_equal(http_get(local)$status_code, 200L)
-  expect_match(rawToChar(http_get(local)$content), "data-message-mode=\"html\"", fixed = TRUE)
+  expect_match(rawToChar(http_get(local)$content), "id=\"livecode-view\"", fixed = TRUE)
   expect_equal(http_get(paste0(local, "web/livecode/livecode.js"))$status_code, 200L)
   expect_equal(http_get(paste0(base, "/"))$status_code, 403L)
   expect_equal(http_get(paste0(base, "/", strrep("0", 32), "/"))$status_code, 403L)
@@ -634,7 +634,6 @@ test_that("in an IDE a server on a network address shows its Viewer a local copy
   # The local page gets what the students' page gets.
   page = ws_client(local)
   expect_equal(page$frames[[1]]$content, "x = 1\n")
-  expect_match(page$frames[[1]]$messages[[1]]$text, "Welcome")
   touch_write(f, "x = 2")
   ed$ctx$contents = "x = 2"
   pump(3, until = function() any(startsWith(contents(page), "x = 2")))
