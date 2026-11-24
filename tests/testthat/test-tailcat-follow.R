@@ -311,9 +311,12 @@ test_that("stopping a follower tells its page that the session has ended", {
 })
 
 test_that("the route of the connection is read from a discovery ping", {
-  expect_equal(tc_route(list(endpoint = "192.0.2.7:41641", relay_region_code = "nyc")), list(kind = "direct", relay = ""))
-  expect_equal(tc_route(list(endpoint = "", relay_region_code = "nyc")), list(kind = "relay", relay = "nyc"))
-  expect_equal(tc_route(list(endpoint = "", relay_region_code = "<b>x</b>")), list(kind = "relay", relay = ""))
+  direct = list(direct = TRUE, endpoint = "192.0.2.7:41641", relay_region_code = "nyc")
+  expect_equal(tc_route(direct), list(kind = "direct", relay = ""))
+  relayed = list(direct = FALSE, endpoint = NA_character_, relay_region_code = "nyc")
+  expect_equal(tc_route(relayed), list(kind = "relay", relay = "nyc"))
+  relayed$relay_region_code = "<b>x</b>"
+  expect_equal(tc_route(relayed), list(kind = "relay", relay = ""))
   expect_equal(tc_route(list()), list(kind = "relay", relay = ""))
 })
 
@@ -323,7 +326,9 @@ test_that("the page is told whether the connection is direct or relayed, until i
   client$pings = 0L
   client$disco_ping_async = function(timeout = 30) {
     client$pings = client$pings + 1L
-    promises::promise_resolve(list(latency = 0.01, endpoint = "", relay_region_id = 1, relay_region_code = "nyc"))
+    promises::promise_resolve(list(
+      latency = 0.01, direct = FALSE, endpoint = NA_character_, relay_region_id = 1, relay_region_code = "nyc"
+    ))
   }
   follower = local_follower(client)
   pump(1, until = function() client$pings > 0)

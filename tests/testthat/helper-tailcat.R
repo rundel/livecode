@@ -18,14 +18,14 @@ fake_conn = function(write = "ok", chunks = list(), eof = FALSE) {
     conn$timeouts = c(conn$timeouts, timeout)
     switch(
       write,
-      ok = promises::promise_resolve(nchar(data, type = "bytes")),
+      ok = promises::promise_resolve(conn),
       hang = promises::promise(function(resolve, reject) NULL),
       fail = promises::promise_reject(simpleError("timed out"))
     )
   }
   conn$write = function(...) {
     conn$written[[length(conn$written) + 1]] = list(...)[[1]]
-    invisible(0L)
+    invisible(conn)
   }
 
   conn$read_async = function(n = 65536L, timeout = Inf, ...) {

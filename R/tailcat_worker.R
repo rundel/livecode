@@ -93,7 +93,7 @@ tc_hub = R6::R6Class(
       private$clients[[id]]$pending = TRUE
       promises::then(
         p,
-        onFulfilled = function(n) {
+        onFulfilled = function(conn) {
           if (!is.null(private$clients[[id]]))
             private$clients[[id]]$pending = FALSE
         },

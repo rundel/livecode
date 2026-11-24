@@ -51,8 +51,7 @@ tc_is_bye = function(x) {
 # The path a follower's connection takes, from a tailcat discovery ping:
 # direct between the two computers, or through one of tailcat's relays.
 tc_route = function(ping) {
-  endpoint = ping[["endpoint"]]
-  if (is_string(endpoint) && nzchar(endpoint))
+  if (isTRUE(ping[["direct"]]))
     return(list(kind = "direct", relay = ""))
 
   relay = ping[["relay_region_code"]]
